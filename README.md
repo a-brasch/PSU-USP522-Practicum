@@ -7,7 +7,7 @@ USP 522 Research Practicum in Applied Demography
 
 3/20/2020 - Winter Quarter 2020
 
-A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon.
+**A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon.**
 
 To help researchers and data users assess the "fitness for use" of upcoming 2020 census data products produced using the Census Bureau's Disclosure Avoidance System based on differential privacy algorithms, the Bureau produced 2010 Census Demonstration Data Products, which were made public on October 19, 2019.
 
