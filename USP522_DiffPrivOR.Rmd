@@ -1044,9 +1044,13 @@ https://maulfoster.maps.arcgis.com/apps/opsdashboard/index.html#/6fea214d11784e5
 
 <iframe src="https://maulfoster.maps.arcgis.com/apps/opsdashboard/index.html#/6fea214d11784e5aa277157e8f5db3f0" width="1500" height="1000" style="border: none;"></iframe>
 
-1. The primary way to select a geography is to access the dropdown lists above the instructions within the dashboard. This list is representative of the geographies in the map extent. Upon selection, the map will zoom-to the selected geography and the statistics will be updated. These lists select both Place & UGB, as well as County and non-County UGB.
-2. Alternatively, select a geography within the map extent by using the Select widget in the top left-hand corner of the map. Multiple selections are required to select both Place & UGB or County and non-UGB County. Upon selection, the map will zoom-to the selected geography and the statistics will be updated.
+<span style="color: #BB86FC;">**Instructions—Read Before Use**</span>
+
+1. The primary way to select a geography is to access the dropdown lists above these instructions. This list is representative of the geographies in the map extent. Upon selection, the map will zoom-to the selected geography and the statistics will be updated. These lists select both Place & UGB, as well as County and non-County UGB.
+2. Alternatively, select a geography within the map extent by using the Select widget in the top left-hand corner of the map. Multiple selections are required to select both Place & UGB or County & non-UGB County. Upon selection, the map will zoom-to the selected geography and the statistics will be updated.
 3. Use the tabs below the statistics panels to view statistics per geography type (note that there are two main panels; the geography of interest must be chosen in both).
+4. Note that the Place/UGB and County/non-UGB county selections are independent of one another. If no selection is made for geography type, the statistics will reflect the geographies visible in the map extent.
+
 
 An exhaustive review of the considerable issues witnessed at the various levels of geography is outside the scope of this study, but users are encouraged to search for their areas-of-interest to review differences in values. A few notable examples of places where differences in variable values will adversely impact data products produced with the dp data include:
 
