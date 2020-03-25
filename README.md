@@ -1,4 +1,8 @@
 # PSU-USP522-Practicum
+http://web.pdx.edu/~abrasch/USP522/
+
+https://github.com/a-brasch/PSU-USP522-Practicum
+
 Portland State University
 
 Graduate Certificate in Applied Social Demography
