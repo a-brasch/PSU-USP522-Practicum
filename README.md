@@ -3,7 +3,8 @@
 
 Portland State University  
 Graduate Certificate in Applied Social Demography  
-USP 522 Research Practicum in Applied Demography: Winter Quarter 2020
+USP 522 Research Practicum in Applied Demography  
+Winter Quarter 2020
 
 **Abstract:**
 
@@ -31,16 +32,12 @@ The results of this research, including interactive visualizations, indicate tha
 
 Alex Brasch
 
-Portland State University | Graduate Student
-
-Graduate Certificate in Applied Social Demography
-
+Portland State University | Graduate Student  
+Graduate Certificate in Applied Social Demography  
 abrasch@pdx.edu
 
-FLO Analytics | Population Geographer | Data Analyst
-
+FLO Analytics | Population Geographer | Data Analyst  
 abrasch@flo-analytics.com
 
-Personal | Cyclist | Data Nerd | Homebrewer
-
+Personal | Cyclist | Data Nerd | Homebrewer  
 alexbrasch88@gmail.com
