@@ -1,5 +1,5 @@
 # PSU-USP522-Practicum
-http://web.pdx.edu/~abrasch/USP522/
+[I'm an inline-style link with title](http://web.pdx.edu/~abrasch/USP522/ "PSU abrasch webspace - USP 522")
 
 https://github.com/a-brasch/PSU-USP522-Practicum
 
