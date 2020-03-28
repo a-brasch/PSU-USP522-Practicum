@@ -1,7 +1,7 @@
 # PSU-USP522-Practicum
 [PSU abrasch webspace - USP 522](http://web.pdx.edu/~abrasch/USP522/ "PSU abrasch webspace - USP 522")
 
-https://github.com/a-brasch/PSU-USP522-Practicum
+[PSU-USP522-Practicum GitHub Repo](https://github.com/a-brasch/PSU-USP522-Practicum "PSU-USP522-Practicum GitHub Repo")
 
 Portland State University
 
