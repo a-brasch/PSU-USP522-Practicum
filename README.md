@@ -2,7 +2,6 @@
 **A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon.**
 
 Portland State University
-
 Graduate Certificate in Applied Social Demography
 
 USP 522 Research Practicum in Applied Demography: Winter Quarter 2020
