@@ -1,0 +1,1900 @@
+---
+title: "A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon"
+author: "By Alex Brasch"
+date: "Winter Quarter 2020"
+output:
+  html_document:
+    includes:
+      before_body: header.html
+      after_body: footer.html
+    code_folding: hide
+    highlight: zenburn
+    self_contained: yes
+    theme: darkly
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: no
+      toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+editor_options:
+  chunk_output_type: console
+always_allow_html: yes
+---
+
+```{css, echo = FALSE}
+  pre:not([class]) {
+    color: #333333;
+    background-color: #cccccc;
+  }
+
+blockquote {
+    padding: 10px 20px;
+    margin: 0 0 20px;
+    font-size: 12px;
+    border-left: 5px solid #eee;
+}
+```
+
+```{r setup, echo=FALSE, warning=FALSE, error=FALSE, results='hide', message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 9, fig.height = 7)
+```
+
+```{r echo=FALSE, warning=FALSE, error=FALSE, results='hide', message=FALSE}
+# Require the pacman package to easily load all necessary packages
+if(!require(pacman)){install.packages("pacman");library(pacman)}
+suppressPackageStartupMessages(p_load(
+  tidyverse,
+  tidycensus,
+  sf,
+  rgdal,
+  tigris,
+  janitor,
+  extrafont,
+  readxl,
+  writexl,
+  plotly,
+  htmlwidgets,
+  xfun))
+
+# Set options
+options(tigris_class = "sf", tigris_use_cache = F) # Return an object of class sf via tigris; do not cache Census shapefile downloads
+options(stringsAsFactors = F) # R often uses a concept of factors to re-encode strings. This can be too early and too aggressive. Sometimes a string is just a string. To avoid problems delay re-encoding of strings by using stringsAsFactors = FALSE when creating data.frames.
+options(dplyr.width = Inf) # In response to "Variables not shown" in dplyr; overrides the width of columns that gets printed out (i.e., to display all columns from df)
+options(scipen = 999) # 'scipen': integer. A penalty to be applied when deciding to print numeric values in fixed or exponential notation. Positive values bias towards fixed and negative towards scientific notation: fixed notation will be preferred unless it is more than 'scipen' digits wider.
+theme_set(theme_dark())  # pre-set the ggplot2 theme.
+```
+
+```{r echo=FALSE, warning=FALSE, error=FALSE, results='hide', message=FALSE}
+# For users with Esri ArcGIS license, install and load the `arcgisbinding` package for use to export data frames to Esri feature classes
+# Reference:
+# https://r-arcgis.github.io/assets/arcgisbinding-vignette.html
+# https://www.rdocumentation.org/packages/arcgisbinding/versions/1.0.1.229/topics/arc.write
+
+# library(arcgisbinding)
+# arc.check_product()
+```
+
+# Abstract
+**A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon**  
+Portland State University  
+Graduate Certificate in Applied Social Demography  
+USP 522 Research Practicum in Applied Demography  
+Winter Quarter 2020
+
+The U.S. Census Bureau has committed to deploy a modernized disclosure avoidance system (DAS) in order to safeguard data collected during the 2020 Census. The foundation of the updated DAS methodology is differential privacy—a set of mathematical algorithms developed by cryptographers and computer scientists intended to protect respondent confidentiality. Differential privacy leverages a suite of techniques that includes the introduction of uncertainty (i.e., noise, synthetic data) into aggregated respondent data, data-swapping, and data imputation, with the goal of ensuring that enumerated data sets cannot be backwards-engineered to identify individual respondents. Differential privacy strives to balance confidentiality and data accuracy; however, many researchers have expressed concern over these techniques' impact on data quality and the potential to adversely affect demographic research and policies, as well as the lives of racial/ethnic minorities and under-represented population subgroups (Salvo 2019, Akee 2019, Van Riper 2019, Nagle 2019). To help researchers and data users assess the "fitness for use" of 2020 census data products produced using differential privacy, the Census Bureau prepared 2010 Census Demonstration Data Products, which were made public on October 19, 2019.
+
+Census data are the foundation of a myriad of public- and private-sector efforts that support accurate funding and resource allocation, housing policy development, and emergency preparedness. From the perspective of county and local governments in Oregon, accurate census data is imperative to the success of such activities as drawing appropriately-sized school attendance areas, assessing the impact of changes in land use and zoning, reaching at-risk populations, determining intercensal population estimates, and forecasting future populations (Salvo et. al 2019, 18). The protection of individual respondents privacy is a necessary and absolutely worthwhile endeavor, but it should not sacrifice the accuracy of data that is essential to the aforementioned processes.
+
+The intent of this study is to better understand the effects of differential privacy on census data by comparing multiple demographic variables at various geographic scales within the state of Oregon. Of particular focus are key demographic variables that inform population forecasting and housing and land use planning, including population per age group, average household size, and occupancy rate. The geographic units of analysis include Oregon counties, places, Urban Growth Boundaries (UGB) of Oregon cities, and non-UGB county areas. For analysis and reporting purposes, the project utilizes the R programming language and RStudio integrated development environment, R Markdown (USP522_DiffPrivOR.Rmd), R packages (tidyverse, tidycensus, sf, rgdal, tigris, readxl, writexl, plotly, htmlwidgets, xfun, and arcgisbinding), U.S. Census API, Alteryx, Esri ArcGIS, and Microsoft Excel.
+
+The results of this research, including interactive visualizations, indicate that adjustments to the differential privacy algorithms and privacy loss budget allocation are necessary to ensure that accurate data is prepared for public consumption. Census Bureau analysts have stated that several promising solutions to the widely-recognized post-processing errors have been identified. (Abowd and Velkoff 2020). Numerous researchers and data users are willing to continue to assist in the process of determining the right balance between accuracy and privacy, and it would benefit all stakeholders if the Census Bureau produced more demonstration data products to show progress on correcting post-processing errors and fine-tuning on the the differential privacy mechanism.
+
+---
+
+**Links:**
+
+[PSU webspace: USP 522](http://web.pdx.edu/~abrasch/USP522/ "PSU webspace: USP 522")
+
+[GitHub Repo: PSU-USP522-Practicum](https://github.com/a-brasch/PSU-USP522-Practicum "GitHub Repo: PSU-USP522-Practicum")
+
+[Esri Dashboard: Census 2010 SF1 vs. Differential Privacy: Oregon Geographies](https://maulfoster.maps.arcgis.com/apps/opsdashboard/index.html#/6fea214d11784e5aa277157e8f5db3f0 "Esri Dashboard: Census 2010 SF1 vs. Differential Privacy: Oregon Geographies")
+
+[Esri Dashboard]
+
+[R Visualizations]
+
+[MS Excel Charts]
+
+# Introduction
+
+The U.S. Census Bureau has committed to deploy a modernized disclosure avoidance system (DAS) in order to safeguard data collected during the 2020 Census. The foundation of the updated DAS methodology is differential privacy—a set of mathematical algorithms developed by cryptographers and computer scientists intended to protect respondent confidentiality. The need to refine the DAS is based on research by the Census Bureau, which concluded that the methods used to protect the confidentiality of earlier census statistics can no longer adequately defend against today’s privacy threats (Abowd and Velkoff 2019). Differential privacy leverages a suite of techniques that includes the introduction of uncertainty (i.e., noise, synthetic data) into aggregated respondent data, data-swapping, and data imputation, with the goal of ensuring that enumerated data sets cannot be backwards-engineered to identify individual respondents. Differential privacy strives to balance confidentiality and data accuracy; however, many researchers have expressed concern over these techniques' impact on data quality and the potential to adversely affect demographic research and policies, as well as the lives of racial/ethnic minorities and under-represented population subgroups (Salvo 2019, Akee 2019, Van Riper 2019, Nagle 2019).
+
+As described by the Census Bureau, differential privacy techniques allow for precise control over the amount of uncertainty that is added to respondent data according to privacy requirements (Abowd and Velkoff 2019). The crux of the debate, therefore, is the balance between privacy and usability. As in other states, numerous stakeholders in Oregon rely on census data to acquire funding, prepare population forecasts for future planning efforts, develop housing and land use policies, and prepare emergency action plans. The accuracy of the census data is imperative to successful planning, budgeting, and program delivery. To help researchers and data users assess the "fitness for use" of upcoming 2020 census data products, demonstration data were produced and made public on October 19, 2019. This set of 2010 Census data products exhibits what can be expected as a result of employing the 2020 DAS. The intent of this study is to better understand the effects of differential privacy on census data by comparing multiple demographic variables at various geographic scales within the state of Oregon. Of particular focus are key demographic variables that inform population forecasting and housing and land use planning, including population per age group, average household size, and occupancy rate. Visualization of the differentially private data in direct comparison to the Census 2010 summary file data will bring greater awareness of the issues that result from injecting unnecessarily large amounts of noise into respondent information.
+
+# Literature Review
+
+The Census Bureau is bound by law to protect individual respondent data gathered during the decennial census. As described in a presentation by Michael Hawes (Senior Adviser for Data Access and Privacy Research and Methodology Directorate U.S. Census Bureau) at the Oregon 2019 Census Data Users Conference, under title 13, Section 9 of the United State Code, the Census Bureau is prohibited from releasing identifiable data "furnished by any particular establishment or individual" (U.S. Census Bureau 2019f). In previous censuses, the privacy of respondent data was protected via data swapping, suppression of geographic information and extreme values, imputation, and perturbation (Ruggles et. al. 2019, 404). Considering advances in mathematics, the strength of widely available computing power, and easy access to large, public databases, there is concern that existing measures no longer adequately protect data privacy. As described by the Census Bureau, there is a growing concern that it may be possible to reconstruct a significant portion of the confidential census data using so-called database reconstruction attack methods, thereby revealing individual respondent data (U.S. Census Bureau 2019d, 5). To avert such potential breaches, the Census Bureau has committed to deploy a modernized DAS to safeguard data collected during the 2020 Census.
+
+DAS's that rely on differential privacy methods are designed to protect individual respondent privacy through the introduction of statistical noise into the data, which produces uncertainty and reduces the likelihood that a specific individual could be identified. As described by the Census Bureau, differential privacy differs from traditional noise-injection privacy methods, in that "the amount of noise required to protect privacy is precisely calibrated to provide provable mathematical guarantees regarding the maximum amount of privacy-loss possible from the publication of data products derived from the confidential data" (U.S. Census Bureau 2019c, 7-2). A differentially private system works by allocating a "privacy-loss budget" to all statistics computed from a confidential dataset (U.S. Census Bureau 2019e). The budget can be envisioned as a spectrum, where on one end completely private data is wholly inaccurate, and on the other end unprotected data is highly accurate because it truly reflects respondent data. As part of differential privacy implementation, a point must be chosen along this spectrum. This choice is a policy decision based on a desired balance between accuracy and confidentiality, which will be made by a committee of senior career Census Bureau data experts and the Data Steward Executive Policy Committee (U.S. Census Bureau 2019e). Therefore, it is imperative for the committees to understand how differential privacy impact the fitness-of-use of the census data.
+
+Numerous research projects have been completed by researchers, scientists, and data users in various fields of study, both prior to and since the release of the 2010 Demonstration Data Products (e.g., Ruggles et. al. 2019, Salvo 2019, Akee 2019, Van Riper 2019, Nagle 2019). Many of these studies were presented at the Workshop on 2020 Census Data Products: Data Needs and Privacy Considerations held on December 11-12, 2019 in Washington DC. The workshop—hosted by the Committee on National Statistics—provided data users a platform from which to present their assessments of the fitness-for-use of the differentially private data. The majority of these studies found considerable issues with the differentially private data, highlighting how the DAS could adversely effect planning, budgeting, and programming efforts. In an overarching rebuke, Ruggles et. al. stated that:
+
+> The differential privacy approach is inconsistent with the statutory obligations, history, and core mission of the Census Bureau". By imposing unrealistic disclosure rules, the Census Bureau may be forced to lock up data that are indispensable for basic research and policy analysis. If public use data become unusable or inaccessible because of overzealous disclosure control, there will be a precipitous decline in the quantity and quality of evidence-based policy research (Ruggles et. al. 2019, 403-404).
+
+In the recent past, the Census Bureau focused on targeted strategies to prevent re-identification attacks, or the ability of an outside adversary to positively identify which person provided a particular response. Although Census Bureau analysts argue that new DAS methods are necessary to prevent database reconstruction, there have been few cases of nefarious actors positively identifying individual respondents using reconstruction methods. In fact, the protections in place—sampling, swapping, suppression of geographic information and extreme values, imputation, and perturbation—have proved successful at protecting personal data (Ruggles et. al. 2019, 404). Moreover, reconstruction of microdata from summary tables does not by itself allow identification of individual respondents. As Ruggles et. al. explain, to determine who the individuals in a reconstructed database actually are, one would then have to match respondent characteristics to an external, respondent-identified database that includes information such as names or social security numbers to complete useful re-identification attack (2019, 405). This is not to suggest that data privacy should be taken lightly or that database reconstruction is not possible or of greater concern today than in the past (due to widely available computing power and the availability of private-sector, respondent-identified data); however, differential privacy may exceed what is necessary to keep data safe under law and precedent (Ruggles et. al. 2019, 406).
+
+Presentations of research at the Committee on National Statistics echoed the preceding claims based on analysis of the 2010 Demonstration Data Products. Of particular note are the studies finding that:
+
+1. Geographies off-spine of the Standard Hierarchy of Census Geographic Entities (e.g., Places) generally exhibit more egregious differences than on-spine geographies (Van Riper and Spielman 2019, 22),
+2. The impact of the injected noise varies by place and population sub-group (Van Riper and Spielman 2019, 22), and 
+3. The current privacy loss budget disproportionately impacts already hard-to-count populations (e.g., American Indian, Alaska Native, and Native Hawaiian).
+
+Additional research also found that data accuracy at the sub-state (county, city, etc.) level will be drastically reduced if the current amount of noise injected into the data is maintained. For example, in a Virginia case study, the total number of girls ages 15-19 in the City of Emporia were decreased from the actual 185 to only 30. Applying this number to the teen pregnancy rate for Emporia increased the rate from 10 percent to 66 percent (Gunter 2020, 1). The overarching finding of many of the recent studies is that statistics produced by government and third-party actors using data in which differential privacy is applied are at risk of being inconsistent and unreasonable for comparison over time.
+
+# Methodology
+
+Since values of variables like total population must be held constant at the state level, the adjustment of values among smaller geographic areas and statistical areas is a zero-sum game. However, recent research found that the differential privacy algorithms being applied to the demonstration data generally shift population from more populous to less populous area and from large race groups to small race groups (Gunter 2020, 1). In order to assess if similar patterns are occurring in Oregon, this study makes comparisons between the original 2010 Summary File 1 census data (i.e., SF 1, sf) and the differentially private demonstration data (i.e., 2010 Census Demonstration Data Files, dp). The geographic units of analysis include Oregon counties, places, Urban Growth Boundaries (UGB) of Oregon cities, and non-UGB county areas. For analysis and reporting purposes, the project utilizes the R programming language and RStudio integrated development environment, R Markdown, R packages (tidyverse, plotly, tidycensus, etc.), U.S. Census API, Alteryx, Esri ArcGIS, and Microsoft Excel. The results of this study, including interactive visualizations, provide the Portland State University (PSU) Population Research Center (PRC) and other Oregon stakeholders with a primer to assess the effects of differential privacy on 2020 Census summary tables and demographic assumptions used to prepare population estimates, population forecasts, housing and land use policies, and other demographic data products.
+
+<span style="color: #BB86FC;">**Note that the majority of referenced files are embedded (i.e., available to download) within the HTML version of this R Markdown document. If not found in-line at the point of reference, the files are located in the [Supporting Data] section. Large and proprietary files were not embedded in the HTML file, but the former may be available upon request.**</span>
+
+# Data Wrangling
+
+To facilitate comparisons between the sf and dp data set, the two segments of data need to be retrieved and prepared for analysis. The following section contains all the necessary steps to retrieve, wrangle, reshape, and blend the sf and dp 2010 census data at the geographic levels of county, congressional district, state legislative district, place, and census block. To save on processing time and avoid local memory limitations, data-intensive code chunks have been converted to comments (e.g., retrieve all Oregon census blocks using `tigris` package). Readers can view the underlying code while the input data is read-in as part of the R Project's local data.
+
+The 2010 Demonstration Data Products are available directly from the U.S. Census Bureau (CB) at the following locations.  
+[2010 Demonstration Data Products](https://www.census.gov/programs-surveys/decennial-census/2020-census/planning-management/2020-census-data-products/2010-demonstration-data-products.html "2010 Demonstration Data Products")  
+[2010 Demonstration Data Products FTP Site](https://www2.census.gov/programs-surveys/decennial/2020/program-management/data-product-planning/2010-demonstration-data-products/?# "2010 Demonstration Data Products FTP Site")
+
+> As noted by the CB within the 2010 Demonstration Data Product Technical Documentation, the data in the 2010 Demonstration Data Products are segmented. This is done to manage the volume of data and to facilitate exporting into spreadsheet or database software. The data and the corresponding geographic information for an individual state are known as the file set. Because of the large size of the tables, the 2010 Demonstration Data Products’ Demographic and Housing Demonstration data files will be broken into 15 files: a geographic header record file and 14 data segment files. The Redistricting data will be broken into four files: a geographic header record file and three data segment files. To get a complete set of the 2010 Demonstration Data Products’ data files, users must download the geographic header file and all the data file segments in the package. The zip archive files are in the Unicode Transformation Format (UTF-8). The geographic header file contains fixed fields while the data segments are in a comma-delimited format. Both the geographic header and the data files contain geographic linking fields. These files were created in a Linux environment but should be usable from any operating system. Standard software packages can be used to import and manipulate these data files. These are text files, however, the file extension is not ‘.txt’. The user will need to rename the files with a .txt extension for import into some software packages. 
+
+The segmentation, delimitation, and file format of these data make preparation for analysis challenging and time-consuming. To improve ease of use and facilitate timely comparison, two organizations have processed the source data into more user-friendly file types and formats. The IPUMS National Historical Geographic Information System (NHGIS) prepared the two segments of data for comparison by joining them into a more simplified format organized by geography. [These data sets](https://www.nhgis.org/differentially-private-2010-census-data "These data sets") are recommended based on ease of use, but unfortunately, census block data is unavailable, which is required by this study to derive Oregon UGB values based on census block aggregation. Therefore, the data sets prepared by the Cornell Institute for Social and Economic Research (CISER) will be used.
+
+## Demonstration Data Products
+
+CISER prepared simplified alternatives to the files included on the CB’s file transfer protocol site, representing both the 2010 Demographic and Housing Demonstration Files. The combined file was created in SAS and then exported to SPSS, STATA, and CSV using Stat/Transfer. A similar file exists for the 2010 Census SF1 data segments for comparison. The files are available at the following locations.  
+[Census 2010 DHC Download Center](https://ciser.cornell.edu/data/data-archive/census-2010-dhc-download-center/ "Census 2010 DHC Download Center")  
+[Census 2010 SF1 Download Center](https://ciser.cornell.edu/data/data-archive/census-2010-sf1-download-center/ "Census 2010 SF1 Download Center")
+
+<span style="color: #BB86FC;">**Note that all code chunks included below were created using the R programming language, RStudio integrated development environment, R Markdown, and R packages (tidyverse, tidycensus, sf, rgdal, tigris, readxl, writexl, plotly, htmlwidgets, xfun, and arcgisbinding).**</span>
+
+Read in the raw sf and dp Oregon CSV files from CISER.
+
+```{r}
+# Read-in complete CISER dp dataset
+# dp_wide_CISER <- read_csv("./Data/CISER/OR2010DHCCSV/OR2010DHC.CSV", col_types = cols(.default = "c")) %>% # cols(.default) to set all to (c) character
+   # mutate_at(c(102:2686), as.double) %>% # Reassign all non-geographic identifier variables as numeric double
+   # mutate_if(is.numeric, ~replace(., is.na(.), 0)) # Replace NA with zero in all numeric variables
+
+# Read-in complete CISER sf dataset
+# sf_wide_CISER <- read_csv("./Data/CISER/or2010ur1_all_vars_csv/or2010ur1_all_vars.CSV", col_types = cols(.default = "c")) %>% # cols(.default) to set all to (c) character
+  # mutate_at(c(102:9060), as.double) %>% # Reassign all non-geographic identifier variables as numeric double
+  # mutate_if(is.numeric, ~replace(., is.na(.), 0)) # Replace NA with zero in all numeric variables
+```
+
+Save as RDS files.
+
+```{r}
+# saveRDS(dp_wide_CISER, "./Data/CISER/dp_wide_CISER.rds")
+# saveRDS(sf_wide_CISER, "./Data/CISER/sf_wide_CISER.rds")
+```
+
+Read in dp and sf RDS files that contain all variables.
+
+```{r class.source = 'fold-show'}
+dp_wide_CISER <- readRDS(file = "./Data/CISER/dp_wide_CISER.rds")
+sf_wide_CISER <- readRDS(file = "./Data/CISER/sf_wide_CISER.rds")
+
+# Field map of dp
+# Observations: 227,437
+# Geographic identifiers: 101
+# Variables: 2,585
+# Total: 2,686
+# 
+# Field map of sf
+# Observations: 227,440
+# Geographic identifiers: 101
+# Variables: 8,959
+# Total: 9,060
+```
+
+Note that there are 3 more observations in the sf dataset, based on a comparison of the data sets. The three missing observations are unified school districts (NAME):
+
+- Yoncalla School District 32
+- School District Not Defined
+- Remainder of Oregon
+
+Curate a list of variables of interest and rename the variables to improve recognition. Perform this task outside of the R environment as follows.
+
+The 2010 Census Summary File 1 Technical Documentation PDF file contains metadata on each variable. The file is represented in a machine-readable format within an MS Access database created and supplied by PSU PRC (SF1_PRC.accdb), specifically within the DATA_FIELD_DESCRIPTORS_SF1_PRC table. 
+
+Use Alteryx `USP522_PRC_SF1_VariableSelection.yxmd` to create additional necessary variables:
+
+- TABLE NAME
+- UNIVERSE
+- FIELD DESCRPTION (concatenation of [FIELD NAME]_[TABLE NAME]_[UNIVERSE])
+Additionally, remove "Table Name" and "Universe" values from the "Field Name" variable.
+
+Import the augmented tables in the SF1_PRC.accdb as:
+
+- DATA_FIELD_DESCRIPTORS_SF1_PRC_AB
+- DATA_FIELD_DESCRIPTORS_SF1_PRC_AB_VarOnly
+
+Create new variables and import into SF1_PRC.accdb (replacing the existing table) as DATA_FIELD_DESCRIPTORS_SF1_PRC_AB_VarOnly:
+
+- USE (Yes or NULL) to represent those variables to include in analysis.
+- FIELD_CODE_DESC is a short descriptive name for variables of interest.
+  
+Use Alteryx `USP522_PRC_SF1_VariableSelection.yxmd` to create a list of curated variables of interest, including geographic identifiers, as well as a list of new names (FIELD_CODE_DESC) for curated variables. Both lists are formatted in the syntax expected by R/dplyr. Copy/paste these vectors into the `select` and `rename` functions in the `CISER cull and rename` code chunk below.
+  
+Reference the following two resources to review the crosswalk of 2010 to 2020 (dp) table numbers and variables IDs.  
+`2020-census-data-products-planning-crosswalk.xlsx`  
+`2010_Demonstration_Data_Product_Technical_Document.pdf`
+
+Note that some 2010 tables do not have a 2020 equivalent. For instance, 2010 P42 (Group Quarters Population by Major Group Quarters Type) does not have a 2020 equivalent; instead use the 2010 P43 (Group Quarters Population by Sex by Age by Major Group Quarters Type) [2020 table number P15].
+
+Also note that some (at least one) variables have been renamed. The 2010 H1 table variable H00010001 (total housing units) was renamed to H0010001 in the 2020 (dp) dataset.
+
+Utilize the curated variable list to cull and rename variables from the complete CISER data sets.
+  
+```{r CISER cull and rename, class.source = 'fold-show'}
+# dp
+dp_wide <- dp_wide_CISER %>% 
+  select(FILEID,STUSAB,SUMLEV,GEOCOMP,CHARITER,CIFSN,LOGRECNO,REGION,DIVISION,STATE,COUNTY,PLACE,TRACT,BLKGRP,BLOCK,CD,SLDU,SLDL,NAME,P0010001,P0050001,P0050002,P0050003,P0050004,P0050005,P0050006,P0050007,P0050008,P0050009,P0050010,P0050011,P0050012,P0050013,P0050014,P0050015,P0050016,P0050017,P0120001,P0120002,P0120003,P0120004,P0120005,P0120006,P0120007,P0120008,P0120009,P0120010,P0120011,P0120012,P0120013,P0120014,P0120015,P0120016,P0120017,P0120018,P0120019,P0120020,P0120021,P0120022,P0120023,P0120024,P0120025,P0120026,P0120027,P0120028,P0120029,P0120030,P0120031,P0120032,P0120033,P0120034,P0120035,P0120036,P0120037,P0120038,P0120039,P0120040,P0120041,P0120042,P0120043,P0120044,P0120045,P0120046,P0120047,P0120048,P0120049,P0150001,P0160001,P0430001,H0010001,H0030001,H0030002,H0030003) %>% # Select curated list of variables
+  rename(pop_total = P0010001, pop_race_total = P0050001, pop_race_notHisp_tot = P0050002, pop_race_notHisp_white = P0050003, pop_race_notHisp_black = P0050004, pop_race_notHisp_amian = P0050005, pop_race_notHisp_asian = P0050006, pop_race_notHisp_nhpi = P0050007, pop_race_notHisp_other = P0050008, pop_race_notHisp_tom = P0050009, pop_race_Hisp_tot = P0050010, pop_race_Hisp_white = P0050011, pop_race_Hisp_black = P0050012, pop_race_Hisp_amian = P0050013, pop_race_Hisp_asian = P0050014, pop_race_Hisp_nhpi = P0050015, pop_race_Hisp_other = P0050016, pop_race_Hisp_tom = P0050017, pop_sex_total = P0120001, pop_sex_m_tot = P0120002, pop_sex_m_00_04 = P0120003, pop_sex_m_05_09 = P0120004, pop_sex_m_10_14 = P0120005, pop_sex_m_15_17 = P0120006, pop_sex_m_18_19 = P0120007, pop_sex_m_20 = P0120008, pop_sex_m_21 = P0120009, pop_sex_m_22_24 = P0120010, pop_sex_m_25_29 = P0120011, pop_sex_m_30_34 = P0120012, pop_sex_m_35_39 = P0120013, pop_sex_m_40_44 = P0120014, pop_sex_m_45_49 = P0120015, pop_sex_m_50_54 = P0120016, pop_sex_m_55_59 = P0120017, pop_sex_m_60_61 = P0120018, pop_sex_m_62_64 = P0120019, pop_sex_m_65_66 = P0120020, pop_sex_m_67_69 = P0120021, pop_sex_m_70_74 = P0120022, pop_sex_m_75_79 = P0120023, pop_sex_m_80_84 = P0120024, pop_sex_m_85_over = P0120025, pop_sex_f_tot = P0120026, pop_sex_f_00_04 = P0120027, pop_sex_f_05_09 = P0120028, pop_sex_f_10_14 = P0120029, pop_sex_f_15_17 = P0120030, pop_sex_f_18_19 = P0120031, pop_sex_f_20 = P0120032, pop_sex_f_21 = P0120033, pop_sex_f_22_24 = P0120034, pop_sex_f_25_29 = P0120035, pop_sex_f_30_34 = P0120036, pop_sex_f_35_39 = P0120037, pop_sex_f_40_44 = P0120038, pop_sex_f_45_49 = P0120039, pop_sex_f_50_54 = P0120040, pop_sex_f_55_59 = P0120041, pop_sex_f_60_61 = P0120042, pop_sex_f_62_64 = P0120043, pop_sex_f_65_66 = P0120044, pop_sex_f_67_69 = P0120045, pop_sex_f_70_74 = P0120046, pop_sex_f_75_79 = P0120047, pop_sex_f_80_84 = P0120048, pop_sex_f_85_over = P0120049, hh_total = P0150001, pop_hh_total = P0160001, pop_gq_total = P0430001, hu_total = H0010001, hu_occpan_total = H0030001, hu_occpan_occ_tot = H0030002, hu_occpan_vac_tot = H0030003) # Rename variables to improve recognition
+
+# sf
+sf_wide <- sf_wide_CISER %>%
+  select(FILEID,STUSAB,SUMLEV,GEOCOMP,CHARITER,CIFSN,LOGRECNO,REGION,DIVISION,STATE,COUNTY,PLACE,TRACT,BLKGRP,BLOCK,CD,SLDU,SLDL,NAME,P0010001,P0050001,P0050002,P0050003,P0050004,P0050005,P0050006,P0050007,P0050008,P0050009,P0050010,P0050011,P0050012,P0050013,P0050014,P0050015,P0050016,P0050017,P0120001,P0120002,P0120003,P0120004,P0120005,P0120006,P0120007,P0120008,P0120009,P0120010,P0120011,P0120012,P0120013,P0120014,P0120015,P0120016,P0120017,P0120018,P0120019,P0120020,P0120021,P0120022,P0120023,P0120024,P0120025,P0120026,P0120027,P0120028,P0120029,P0120030,P0120031,P0120032,P0120033,P0120034,P0120035,P0120036,P0120037,P0120038,P0120039,P0120040,P0120041,P0120042,P0120043,P0120044,P0120045,P0120046,P0120047,P0120048,P0120049,P0150001,P0160001,P0430001,H00010001,H0030001,H0030002,H0030003) %>% # Select curated list of variables
+  rename(pop_total = P0010001, pop_race_total = P0050001, pop_race_notHisp_tot = P0050002, pop_race_notHisp_white = P0050003, pop_race_notHisp_black = P0050004, pop_race_notHisp_amian = P0050005, pop_race_notHisp_asian = P0050006, pop_race_notHisp_nhpi = P0050007, pop_race_notHisp_other = P0050008, pop_race_notHisp_tom = P0050009, pop_race_Hisp_tot = P0050010, pop_race_Hisp_white = P0050011, pop_race_Hisp_black = P0050012, pop_race_Hisp_amian = P0050013, pop_race_Hisp_asian = P0050014, pop_race_Hisp_nhpi = P0050015, pop_race_Hisp_other = P0050016, pop_race_Hisp_tom = P0050017, pop_sex_total = P0120001, pop_sex_m_tot = P0120002, pop_sex_m_00_04 = P0120003, pop_sex_m_05_09 = P0120004, pop_sex_m_10_14 = P0120005, pop_sex_m_15_17 = P0120006, pop_sex_m_18_19 = P0120007, pop_sex_m_20 = P0120008, pop_sex_m_21 = P0120009, pop_sex_m_22_24 = P0120010, pop_sex_m_25_29 = P0120011, pop_sex_m_30_34 = P0120012, pop_sex_m_35_39 = P0120013, pop_sex_m_40_44 = P0120014, pop_sex_m_45_49 = P0120015, pop_sex_m_50_54 = P0120016, pop_sex_m_55_59 = P0120017, pop_sex_m_60_61 = P0120018, pop_sex_m_62_64 = P0120019, pop_sex_m_65_66 = P0120020, pop_sex_m_67_69 = P0120021, pop_sex_m_70_74 = P0120022, pop_sex_m_75_79 = P0120023, pop_sex_m_80_84 = P0120024, pop_sex_m_85_over = P0120025, pop_sex_f_tot = P0120026, pop_sex_f_00_04 = P0120027, pop_sex_f_05_09 = P0120028, pop_sex_f_10_14 = P0120029, pop_sex_f_15_17 = P0120030, pop_sex_f_18_19 = P0120031, pop_sex_f_20 = P0120032, pop_sex_f_21 = P0120033, pop_sex_f_22_24 = P0120034, pop_sex_f_25_29 = P0120035, pop_sex_f_30_34 = P0120036, pop_sex_f_35_39 = P0120037, pop_sex_f_40_44 = P0120038, pop_sex_f_45_49 = P0120039, pop_sex_f_50_54 = P0120040, pop_sex_f_55_59 = P0120041, pop_sex_f_60_61 = P0120042, pop_sex_f_62_64 = P0120043, pop_sex_f_65_66 = P0120044, pop_sex_f_67_69 = P0120045, pop_sex_f_70_74 = P0120046, pop_sex_f_75_79 = P0120047, pop_sex_f_80_84 = P0120048, pop_sex_f_85_over = P0120049, hh_total = P0150001, pop_hh_total = P0160001, pop_gq_total = P0430001, hu_total = H00010001, hu_occpan_total = H0030001, hu_occpan_occ_tot = H0030002, hu_occpan_vac_tot = H0030003) # Rename variables to improve recognition
+
+# Field map
+# Geographic identifiers: 19
+# Variables: 74
+# Total: 93
+```
+
+Remove the complete CISER data frames from the R environment (to save on memory).
+
+```{r}
+remove(dp_wide_CISER)
+remove(sf_wide_CISER)
+```
+
+Calculate additional variables.
+
+```{r}
+# dp
+# Calculate missing 5-year age groups by sex variables by summing composite variables
+# male
+dp_wide <- dp_wide %>%
+  mutate(pop_sex_m_15_19 = pop_sex_m_15_17 + pop_sex_m_18_19) %>%
+  mutate(pop_sex_m_20_24 = pop_sex_m_20 + pop_sex_m_21 + pop_sex_m_22_24) %>%
+  mutate(pop_sex_m_60_64 = pop_sex_m_60_61 + pop_sex_m_62_64) %>%
+  mutate(pop_sex_m_65_69 = pop_sex_m_65_66 + pop_sex_m_67_69)
+# female
+dp_wide <- dp_wide %>%
+  mutate(pop_sex_f_15_19 = pop_sex_f_15_17 + pop_sex_f_18_19) %>%
+  mutate(pop_sex_f_20_24 = pop_sex_f_20 + pop_sex_f_21 + pop_sex_f_22_24) %>%
+  mutate(pop_sex_f_60_64 = pop_sex_f_60_61 + pop_sex_f_62_64) %>%
+  mutate(pop_sex_f_65_69 = pop_sex_f_65_66 + pop_sex_f_67_69)
+
+# Calculate average household size
+dp_wide <- dp_wide %>%
+  mutate(hh_avgsz = pop_hh_total / hu_occpan_occ_tot)
+
+# Calculate occupancy and vacancy percentages
+dp_wide <- dp_wide %>%
+  mutate(hu_occpan_occ_perc = hu_occpan_occ_tot / hu_occpan_total) %>%
+  mutate(hu_occpan_vac_perc = hu_occpan_vac_tot / hu_occpan_total)
+
+dp_wide <- dp_wide %>%
+  mutate(pop_sex_sexratio = (pop_sex_m_tot / pop_sex_f_tot) * 100)
+
+# sf
+# Calculate missing 5-year age groups by sex variables by summing composite variables
+# male
+sf_wide <- sf_wide %>%
+  mutate(pop_sex_m_15_19 = pop_sex_m_15_17 + pop_sex_m_18_19) %>%
+  mutate(pop_sex_m_20_24 = pop_sex_m_20 + pop_sex_m_21 + pop_sex_m_22_24) %>%
+  mutate(pop_sex_m_60_64 = pop_sex_m_60_61 + pop_sex_m_62_64) %>%
+  mutate(pop_sex_m_65_69 = pop_sex_m_65_66 + pop_sex_m_67_69)
+# female
+sf_wide <- sf_wide %>%
+  mutate(pop_sex_f_15_19 = pop_sex_f_15_17 + pop_sex_f_18_19) %>%
+  mutate(pop_sex_f_20_24 = pop_sex_f_20 + pop_sex_f_21 + pop_sex_f_22_24) %>%
+  mutate(pop_sex_f_60_64 = pop_sex_f_60_61 + pop_sex_f_62_64) %>%
+  mutate(pop_sex_f_65_69 = pop_sex_f_65_66 + pop_sex_f_67_69)
+
+# Calculate average household size
+sf_wide <- sf_wide %>%
+  mutate(hh_avgsz = pop_hh_total / hu_occpan_occ_tot)
+
+# Calculate occupancy and vacancy percentages
+sf_wide <- sf_wide %>%
+  mutate(hu_occpan_occ_perc = hu_occpan_occ_tot / hu_occpan_total) %>%
+  mutate(hu_occpan_vac_perc = hu_occpan_vac_tot / hu_occpan_total)
+
+# Calculate sex ratio
+sf_wide <- sf_wide %>%
+  mutate(pop_sex_sexratio = (pop_sex_m_tot / pop_sex_f_tot) * 100)
+
+# Field map
+# Geographic identifiers: 19
+# Existing variables: 74
+# New variables: 12
+# Variables: 86
+# Total: 105
+```
+
+Reshape data frame to long format.
+
+```{r class.source = 'fold-show'}
+# CISER dp data
+dp_long <- dp_wide %>%
+  gather(variable, dp, 20:length(.)) %>% # Transpose all non-geographic variables 
+  mutate(dp = as.numeric(dp, na.rm = T)) # Set the dp variable to be numeric and ensure NULLs are handled with na.rm = TRUE
+
+# CISER sf data
+sf_long <- sf_wide %>%
+  gather(variable, sf, 20:length(.)) %>% # Transpose all non-geographic variables 
+  mutate(sf = as.numeric(sf, na.rm = T)) # Set the sf variable to be numeric and ensure NULLs are handled with na.rm = TRUE
+
+# Field map
+# Geographic identifiers: 19
+# Variable names: 1
+# Variable values: 1
+# Total: 21
+# 19,559,582 observations (227,437 * 86 name-value pairs)
+# 19,559,840 observations (227,440 * 86 name-value pairs)
+```
+
+Remove the wide data frames.
+
+```{r}
+remove(dp_wide)
+remove(sf_wide)
+```
+
+Calculate total population by age variables.
+
+```{r}
+# dp
+# Combine (sum) the male and female age group variables
+# Determine fields to GroupBy
+long_gbcol = names(dp_long)[-21] # All fields except for values in the 21st column
+
+dp_long_mf <- dp_long %>%
+  filter(str_detect(variable, "^pop_sex_m_") | str_detect(variable, "^pop_sex_f_")) %>% # Filter all male and female age group variables
+  mutate(variable=str_replace(variable,"m_","tot_"), variable=str_replace(variable,"f_","tot_")) %>% # Remove male/female from variable name
+  group_by_at(vars(one_of(long_gbcol))) %>% # GroupBy key columns, all except for dp values column
+  summarise(dp = sum(dp, na.rm=T)) %>% # Sum values per group (i.e. [m] + [f]); ensure na.rm=T to handle NULLs properly
+  ungroup() %>% # Ungroup to return to the starting dataframe structure
+  filter(variable != "pop_sex_tot_tot") # Remove the sum of m_tot and f_tot
+
+# Union the new age group total variables to the dp_long data frame
+dp_long <- rbind(dp_long, dp_long_mf)
+remove(dp_long_mf)
+
+# sf
+# Combine (sum) the male and female age group variables
+sf_long_mf <- sf_long %>%
+  filter(str_detect(variable, "^pop_sex_m_") | str_detect(variable, "^pop_sex_f_")) %>% # Filter all male and female age group variables
+  mutate(variable=str_replace(variable,"m_","tot_"), variable=str_replace(variable,"f_","tot_")) %>% # Remove male/female from variable name
+  group_by_at(vars(one_of(long_gbcol))) %>% # GroupBy key columns, all except for dp values in the 46th column
+  summarise(sf = sum(sf, na.rm=T)) %>% # Sum values per group (i.e. [m] + [f]); ensure na.rm=T to handle NULLs properly
+  ungroup() %>% # Ungroup to return to the starting dataframe structure
+  filter(variable != "pop_sex_tot_tot") # Remove the sum of m_tot and f_tot
+
+# Union the new age group total variables to the sf_long data frame
+sf_long <- rbind(sf_long, sf_long_mf)
+remove(sf_long_mf)
+```
+
+Calculate race variables that do not distinguish between Hispanic or Latino origin.
+
+```{r}
+# dp
+# Combine (sum) the Hispanic & not Hispanic race variables
+dp_long_race <- dp_long %>%
+  filter(str_detect(variable, "^pop_race_notHisp_") | str_detect(variable, "^pop_race_Hisp")) %>% # Filter all race variables
+  mutate(variable=str_replace(variable,"notHisp_","tot_"), variable=str_replace(variable,"Hisp_","tot_")) %>% # Remove notHisp and Hisp from variable name
+  group_by_at(vars(one_of(long_gbcol))) %>% # GroupBy key columns, all except for dp values column
+  summarise(dp = sum(dp, na.rm=T)) %>% # Sum values per group
+  ungroup() %>% # Ungroup to return to the starting dataframe structure
+  filter(variable != "pop_race_tot_tot") # Remove the sum of pop_race_Hisp_tot and pop_race_notHisp_tot
+
+# Union the new total variables to the dp_long data frame
+dp_long <- rbind(dp_long, dp_long_race)
+remove(dp_long_race)
+
+# sf
+# Combine (sum) the male and female age group variables
+sf_long_race <- sf_long %>%
+  filter(str_detect(variable, "^pop_race_notHisp_") | str_detect(variable, "^pop_race_Hisp")) %>% # Filter all race variables
+  mutate(variable=str_replace(variable,"notHisp_","tot_"), variable=str_replace(variable,"Hisp_","tot_")) %>% # Remove notHisp and Hisp from variable name
+  group_by_at(vars(one_of(long_gbcol))) %>% # GroupBy key columns, all except for sf values column
+  summarise(sf = sum(sf, na.rm=T)) %>% # Sum values per group
+  ungroup() %>% # Ungroup to return to the starting dataframe structure
+  filter(variable != "pop_race_tot_tot") # Remove the sum of pop_race_Hisp_tot and pop_race_notHisp_tot
+
+# Union the new total variables to the sf_long data frame
+sf_long <- rbind(sf_long, sf_long_race)
+remove(sf_long_race)
+
+remove(long_gbcol)
+
+# Field map
+# Geographic identifiers: 19
+# Variable names: 1
+# Variable values: 1
+# Total: 21
+# Name-value pairs added: 34 (+ 86 = 120)
+# 27,292,440 observations (227,437 * 120 name-value pairs)
+# 27,292,800 observations (227,440 * 120 name-value pairs)
+```
+
+Save out dp and sf long data frames to RDS files.
+
+```{r}
+# saveRDS(dp_long, "./Data/intermediates/dp_long.rds")
+# saveRDS(sf_long, "./Data/intermediates/sf_long.rds")
+```
+
+Subset data by geography: counties, congressional districts, state legislative districts, places, and blocks.
+Reference: 2010 Census Summary File 1.pdf
+
+Count of (2010) Oregon geographies of interest:
+
+- Counties: 36
+- Congressional Districts: 5 (111th Congress January 2009-January 2011) and 113th Congress January 2013-January 2015)
+- State legislative districts, upper chamber (senate): 30
+- State legislative districts, lower chamber (house): 60
+- Places: 377 (242 incorporated places and 135 census designated places (CDPs))
+- Tracts: 834
+- Block groups: 2,634
+- Blocks: 196,621
+
+```{r}
+# Counties
+dp_long_co <- dp_long %>%
+  filter(SUMLEV == "050" & GEOCOMP == "00")
+sf_long_co <- sf_long %>%
+  filter(SUMLEV == "050" & GEOCOMP == "00")
+
+# Congressional Districts
+dp_long_cd <- dp_long %>%
+  filter(SUMLEV == "500")
+sf_long_cd <- sf_long %>%
+  filter(SUMLEV == "500")
+
+# State Legislative Districts, upper and lower chambers
+dp_long_sldu <- dp_long %>%
+  filter(SUMLEV == "610")
+sf_long_sldu <- sf_long %>%
+  filter(SUMLEV == "610")
+dp_long_sldl <- dp_long %>%
+  filter(SUMLEV == "620")
+sf_long_sldl <- sf_long %>%
+  filter(SUMLEV == "620")
+
+# Places
+dp_long_pl <- dp_long %>%
+  filter(SUMLEV == "160" & GEOCOMP == "00")
+sf_long_pl <- sf_long %>%
+  filter(SUMLEV == "160" & GEOCOMP == "00")
+
+# Blocks
+dp_long_bl <- dp_long %>%
+  filter(SUMLEV == "100")
+sf_long_bl <- sf_long %>%
+  filter(SUMLEV == "100")
+
+# Field map
+# Geographic identifiers: 19
+# Variable names: 1
+# Variable values: 1
+# Total: 21
+# Number of Obs = x geographic entities * y name-value pairs (e.g., 5 congressional districts * 120 = 600 observations)
+```
+
+Create geographic identifiers (GEOID). [Reference Understanding Geographic Identifiers](https://www.census.gov/programs-surveys/geography/guidance/geo-identifiers.html# "Reference Understanding Geographic Identifiers")
+
+```{r}
+# dp
+dp_long_co <- dp_long_co %>%
+  unite(GEOID, c("STATE", "COUNTY"), sep = "", remove = F) %>% # Concatenate fields, sep = "" as not to include underscore between values, and remove = F as not to remove to originator fields
+  select(GEOID, everything()) # Place GEOID field at the beginning of the data frame
+
+dp_long_cd <- dp_long_cd %>%
+  unite(GEOID, c("STATE", "CD"), sep = "", remove = F) %>%
+  select(GEOID, everything())
+
+dp_long_sldu <- dp_long_sldu %>%
+  unite(GEOID, c("STATE", "SLDU"), sep = "", remove = F) %>%
+  select(GEOID, everything())
+
+dp_long_sldl <- dp_long_sldl %>%
+  unite(GEOID, c("STATE", "SLDL"), sep = "", remove = F) %>%
+  select(GEOID, everything())
+
+dp_long_pl <- dp_long_pl %>%
+  unite(GEOID, c("STATE", "PLACE"), sep = "", remove = F) %>%
+  select(GEOID, everything())
+
+dp_long_bl <- dp_long_bl %>%
+  unite(GEOID, c("STATE", "COUNTY", "TRACT", "BLOCK"), sep = "", remove = F) %>%
+  select(GEOID, everything())
+
+# sf
+sf_long_co <- sf_long_co %>%
+  unite(GEOID, c("STATE", "COUNTY"), sep = "", remove = F) %>%
+  select(GEOID, everything())
+
+sf_long_cd <- sf_long_cd %>%
+  unite(GEOID, c("STATE", "CD"), sep = "", remove = F) %>%
+  select(GEOID, everything())
+
+sf_long_sldu <- sf_long_sldu %>%
+  unite(GEOID, c("STATE", "SLDU"), sep = "", remove = F) %>%
+  select(GEOID, everything())
+
+sf_long_sldl <- sf_long_sldl %>%
+  unite(GEOID, c("STATE", "SLDL"), sep = "", remove = F) %>%
+  select(GEOID, everything())
+
+sf_long_pl <- sf_long_pl %>%
+  unite(GEOID, c("STATE", "PLACE"), sep = "", remove = F) %>%
+  select(GEOID, everything())
+
+sf_long_bl <- sf_long_bl %>%
+  unite(GEOID, c("STATE", "COUNTY", "TRACT", "BLOCK"), sep = "", remove = F) %>%
+  select(GEOID, everything())
+
+# Field map
+# Geographic identifiers: 20
+# Variable names: 1
+# Variable values: 1
+# Total: 22
+```
+
+Remove the non-geographically subset data frames from the R environment (to save on memory).
+
+```{r}
+remove(dp_long)
+remove(sf_long)
+```
+
+Union the geographically subsetted data frames, keeping only the GEOID and NAME geographic identifiers.
+
+```{r}
+dp_long_co <- dp_long_co %>%
+  mutate(GEOGRAPHY = "County") %>% # Create GEOGRAPHY variable
+  select(GEOGRAPHY, GEOID, NAME, variable, dp) # Remove unncessary fields
+dp_long_cd <- dp_long_cd %>%
+  mutate(GEOGRAPHY = "Congressional District") %>%
+  select(GEOGRAPHY, GEOID, NAME, variable, dp)
+dp_long_sldu <- dp_long_sldu %>%
+  mutate(GEOGRAPHY = "State Legislative District Upper House") %>%
+  select(GEOGRAPHY, GEOID, NAME, variable, dp)
+dp_long_sldl <- dp_long_sldl %>%
+  mutate(GEOGRAPHY = "State Legislative District Lower House") %>%
+  select(GEOGRAPHY, GEOID, NAME, variable, dp)
+dp_long_pl <- dp_long_pl %>%
+  mutate(GEOGRAPHY = "Place") %>%
+  select(GEOGRAPHY, GEOID, NAME, variable, dp)
+dp_long_bl <- dp_long_bl %>%
+  mutate(GEOGRAPHY = "Block") %>%
+  select(GEOGRAPHY, GEOID, NAME, variable, dp)
+sf_long_co <- sf_long_co %>%
+  mutate(GEOGRAPHY = "County") %>%
+  select(GEOGRAPHY, GEOID, NAME, variable, sf)
+sf_long_cd <- sf_long_cd %>%
+  mutate(GEOGRAPHY = "Congressional District") %>%
+  select(GEOGRAPHY, GEOID, NAME, variable, sf)
+sf_long_sldu <- sf_long_sldu %>%
+  mutate(GEOGRAPHY = "State Legislative District Upper House") %>%
+  select(GEOGRAPHY, GEOID, NAME, variable, sf)
+sf_long_sldl <- sf_long_sldl %>%
+  mutate(GEOGRAPHY = "State Legislative District Lower House") %>%
+  select(GEOGRAPHY, GEOID, NAME, variable, sf)
+sf_long_pl <- sf_long_pl %>%
+  mutate(GEOGRAPHY = "Place") %>%
+  select(GEOGRAPHY, GEOID, NAME, variable, sf)
+sf_long_bl <- sf_long_bl %>%
+  mutate(GEOGRAPHY = "Block") %>%
+  select(GEOGRAPHY, GEOID, NAME, variable, sf)
+
+# Union the data frames
+dp_long_geog <- rbind(dp_long_co, dp_long_cd, dp_long_sldu, dp_long_sldl, dp_long_pl, dp_long_bl)
+sf_long_geog <- rbind(sf_long_co, sf_long_cd, sf_long_sldu, sf_long_sldl, sf_long_pl, sf_long_bl)
+
+# Field map
+# Geographic identifiers: 3
+# Variable names: 1
+# Variable values: 1
+# Total: 5
+# Obs: 23,655,480 (sum of geog obs)
+```
+
+Join dp and sf data frames, and calculate the difference between dp and sf variables.
+
+```{r class.source = 'fold-show'}
+# Join based on multiple fields
+dpsf_long_geog <- dp_long_geog %>%
+  inner_join(sf_long_geog, by = c('GEOGRAPHY' = 'GEOGRAPHY', 'GEOID' = 'GEOID', 'NAME' = 'NAME', 'variable' = 'variable')) %>%
+  mutate(diff = dp - sf)
+
+# Field map
+# Geographic identifiers: 3
+# Variable names: 1
+# Variable values: 3
+# Total: 7
+# Obs: 23,655,480
+```
+
+Reshape to wide format.
+
+```{r class.source = 'fold-show'}
+# Create a function to gather %>% unite %>% spread for repeated use
+spread_n <- function(df, key, value) {
+    # quote key
+    keyq <- rlang::enquo(key)
+    # break value vector into quotes
+    valueq <- rlang::enquo(value)
+    s <- rlang::quos(!!valueq)
+    df %>% gather(value_type, value, !!!s) %>%
+        unite(temp, !!keyq, value_type) %>%
+        spread(temp, value)}
+
+dpsf_wide_geog <- dpsf_long_geog %>%
+  spread_n(variable, c(dp, sf, diff)) # Spread on multiple value variables, adding variable name as a suffix
+
+# Field map
+# Geographic identifiers: 3
+# Variables: 360 (120 * 3 [dp, sf, diff])
+# Total: 363
+# Obs: 197,129 (sum of all geographic entities)
+```
+
+Save out the dpsf long and wide geographically categorized and subsetted data frames to RDS files.
+
+```{r}
+# Save as RDS
+# saveRDS(dp_long_geog, "./Data/intermediates/dp_long_geog.rds")
+# saveRDS(sf_long_geog, "./Data/intermediates/sf_long_geog.rds")
+# saveRDS(dpsf_long_geog, "./Data/intermediates/dpsf_long_geog.rds")
+# saveRDS(dpsf_wide_geog, "./Data/intermediates/dpsf_wide_geog.rds")
+```
+
+## Spatial Analysis
+
+Retrieve geospatial data for all Oregon counties, congressional districts, state legislative districts (upper and lower), places, and blocks.
+
+```{r warning=FALSE, message=FALSE, results='hide'}
+# Retrieve data via tigris package
+# Reference: https://cran.r-project.org/web/packages/tigris/tigris.pdf
+# By default `tigris` retrieves the most recent vintage of a dataset, so year specification is required
+# Default Census TIGER/Line coordinate reference system (CRS) is NAD83 EPSG 4269
+# https://spatialreference.org/ref/epsg/nad83)
+
+# gc() # A call of gc causes a garbage collection to take place. The primary purpose of calling gc is for the report on memory usage. Use this before and after a data-heavy processing task.
+# shp_co <- tigris::counties("OR", year = 2010, cb = FALSE)
+# shp_bl <- tigris::blocks("OR", year = 2010) # Only TIGER/Line Shapefiles available, so no cb parameter necessary
+# gc()
+
+# Cannot specify year for cd, sldu, sldl, and pl: "Error: tigris::congressional_districts is not currently available for years prior to 2011.  To request this feature, file an issue at https://github.com/walkerke/tigris."
+# shp_cd <- tigris::congressional_districts(cb = FALSE) %>% 
+#     filter(STATEFP == "41") # State specification parameter non-existant, so filter to Oregon using STATEFP
+# shp_sldu <- tigris::state_legislative_districts("OR", house = "upper", cb = FALSE) # Specify house, cannot specify year (see above)
+# shp_sldl <- tigris::state_legislative_districts("OR", house = "lower", cb = FALSE) # Specify house, cannot specify year (see above)
+# shp_pl <- tigris::places("OR")
+
+# Therefore, obtain manually from Census TIGER/Line web interface
+# https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html
+# shp_cd <- st_read("./Data/Census/TIGER/tl_2010_41_cd111/tl_2010_41_cd111.shp")
+# shp_sldu <- st_read("./Data/Census/TIGER/tl_2010_41_sldu10/tl_2010_41_sldu10.shp")
+# shp_sldl <- st_read("./Data/Census/TIGER/tl_2010_41_sldl10/tl_2010_41_sldl10.shp")
+# shp_pl <- st_read("./Data/Census/TIGER/tl_2010_41_place10/tl_2010_41_place10.shp")
+```
+
+Save out the geospatial data to RDS files.
+
+```{r}
+# Save out as RDS files
+# saveRDS(shp_co,"./Data/intermediates/shp_co.rds")
+# saveRDS(shp_cd,"./Data/intermediates/shp_cd.rds")
+# saveRDS(shp_sldu,"./Data/intermediates/shp_sldu.rds")
+# saveRDS(shp_sldl,"./Data/intermediates/shp_sldl.rds")
+# saveRDS(shp_pl,"./Data/intermediates/shp_pl.rds")
+# saveRDS(shp_bl,"./Data/intermediates/shp_bl.rds")
+```
+
+Read in the geospatial data previously retrieved via `tigris` and Census TIGER/Line web interface.
+
+```{r class.source = 'fold-show'}
+# Read in the geospatial data
+shp_co <- readRDS("./Data/intermediates/shp_co.rds")
+shp_cd <- readRDS("./Data/intermediates/shp_cd.rds")
+shp_sldu <- readRDS("./Data/intermediates/shp_sldu.rds")
+shp_sldl <- readRDS("./Data/intermediates/shp_sldl.rds")
+shp_pl <- readRDS("./Data/intermediates/shp_pl.rds")
+shp_bl <- readRDS("./Data/intermediates/shp_bl.rds")
+```
+
+Standardize variables.
+
+```{r}
+# Use NAMELSAD10 for all geographies. For counties and places, this includes suffixes (e.g., " County") in the name, which is maintained in the ORIG_NAME variable, but removed in the NAME variable, for joining with the non-spatial data
+shp_co <- shp_co %>%
+  mutate(GEOID = GEOID10) %>% # Rename GEOID10 to GEOID to match non-spatial data
+  mutate(GEOGRAPHY = "County") %>% # Create GEOGRAPHY variable
+  mutate(ORIG_NAME = NAMELSAD10) %>% # Rename NAMELSAD to NAME to match non-spatial data
+  mutate(NAME = NAMELSAD10) %>% # Create new NAME variable
+  mutate(NAME = str_replace(NAME, " County", "")) %>%
+  select(GEOGRAPHY, GEOID, NAME, ORIG_NAME, geometry) # Keep on necessary variables
+
+# Ensure there are no trailing spaces
+# aggregate(NAME~NAME1, transform(shp_co, NAME1=NAME), FUN=function(x) nchar(unique(x)))
+
+shp_cd <- shp_cd %>%
+  mutate(GEOID = GEOID10) %>%
+  mutate(ORIG_NAME = NAMELSAD10) %>% # Only created to maintain standardized schema
+  mutate(NAME = NAMELSAD10) %>%
+  mutate(GEOGRAPHY = "Congressional District") %>%
+  select(GEOGRAPHY, GEOID, NAME, ORIG_NAME, geometry)
+shp_sldu <- shp_sldu %>%
+  mutate(GEOID = GEOID10) %>%
+  mutate(ORIG_NAME = NAMELSAD10) %>% # Only created to maintain standardized schema
+  mutate(NAME = NAMELSAD10) %>%
+  mutate(GEOGRAPHY = "State Legislative District Upper House") %>%
+  select(GEOGRAPHY, GEOID, NAME, ORIG_NAME, geometry)
+shp_sldl <- shp_sldl %>%
+  mutate(GEOID = GEOID10) %>%
+  mutate(ORIG_NAME = NAMELSAD10) %>% # Only created to maintain standardized schema
+  mutate(NAME = NAMELSAD10) %>%
+  mutate(GEOGRAPHY = "State Legislative District Lower House") %>%
+  select(GEOGRAPHY, GEOID, NAME, ORIG_NAME, geometry)
+shp_pl <- shp_pl %>%
+  mutate(GEOID = GEOID10) %>%
+  mutate(ORIG_NAME = NAMELSAD10) %>% # Rename NAMELSAD to NAME to match non-spatial data
+  mutate(NAME = NAME10) %>%
+  mutate(GEOGRAPHY = "Place") %>%
+  mutate(NAME = str_replace(NAME, " city", "")) %>%
+  mutate(NAME = str_replace(NAME, " town", "")) %>%
+  select(GEOGRAPHY, GEOID, NAME, ORIG_NAME, geometry)
+shp_bl <- shp_bl %>%
+  mutate(GEOID = GEOID10) %>%
+  mutate(ORIG_NAME = NAME10) %>% # Only created to maintain standardized schema
+  mutate(NAME = NAME10) %>%
+  mutate(GEOGRAPHY = "Block") %>%
+  select(GEOGRAPHY, GEOID, NAME, ORIG_NAME, geometry)
+
+# Union the shapefiles
+shp_all <- rbind(shp_co, shp_cd, shp_sldu, shp_sldl, shp_pl, shp_bl)
+
+# Field map
+# Geographic identifiers: 4
+# Geometry: 1
+# Total: 5
+# Obs: 197,129 (sum of all geographic entities)
+```
+
+Join the wide format attribute data to the geospatial data.
+
+```{r class.source = 'fold-show'}
+dpsf_wide_geog_geo <- shp_all %>% 
+  inner_join(dpsf_wide_geog, by = c('GEOGRAPHY' = 'GEOGRAPHY', 'GEOID' = 'GEOID', 'ORIG_NAME' = 'NAME'))
+
+# Field map
+# Geographic identifiers: 4
+# Variables: 360 (120 * 3 [dp, sf, diff])
+# Geometry: 1
+# Total: 365
+# Obs: 197,129 (sum of all geographic entities)
+```
+
+Save out the dpsf wide spatial data frame as a RDS file.
+
+```{r}
+# saveRDS(dpsf_wide_geog_geo,"./Data/intermediates/dpsf_wide_geog_geo.rds")
+```
+
+The PSU PRC Oregon Population Forecast Program (OPFP) is mandated by law (see `Population Forecast Components section` below) to prepare population forecasts for counties and cities within the State of Oregon. In order to assess the potential effects of differential privacy on the OPFP's forecasts for Urban Growth Boundaries (UGB, the block data must be allocated and aggregated to these larger geographies. Specifically, the block data is spatially allocated to the most recent UGBs (i.e. nearest to forecast launch year [2018]) using a simple centroid allocation method, in which the central point of a block polygon is derived and spatially joined to a UGB or non-UGB county area. For blocks that border or intersect a UGB, the OPFP spatially reviews the areas to ensure that at least 50% of housing units are located within the UGB before assigning it to an urban area (personal communication with Nick Chun, former OPFP Manager, 2019).
+
+Read in the 2018 UGBs (available from the Oregon Spatial Data Library).
+
+```{r results='hide', class.source = 'fold-show'}
+shp_UGB2018 <- st_read("./Data/GIS/Oregon Spatial Data Library/UGB_2018.shp")
+
+st_crs(shp_UGB2018) # Check crs
+
+shp_UGB2018 <- shp_UGB2018 %>%
+  st_transform(st_crs(shp_co)) # Transform into shp_co crs (NAD 83 EPSG 4269)
+
+st_crs(shp_UGB2018)
+
+shp_UGB2018 <- shp_UGB2018 %>%
+  select(InstName, instCode)
+```
+
+Save UGBs as RDS file.
+
+```{r}
+# saveRDS(shp_UGB2018,"./Data/intermediates/shp_UGB2018.rds")
+```
+
+Spatial join the blocks and 2018 UGBs.
+
+```{r warning=FALSE, results='hide', message=FALSE, class.source = 'fold-show', error=FALSE}
+# Create a data frame of only blocks
+dpsf_wide_bl_geo <- dpsf_wide_geog_geo %>% 
+  filter(GEOGRAPHY == "Block")
+
+# Convert blocks to centroids
+shp_bl_pts <- st_centroid(shp_bl)
+
+# Spatial join block points and 2018 UGBs, and join block points (with UGBs assigned) to block polygons
+dpsf_wide_bl_geo <- st_join(shp_bl_pts, shp_UGB2018 %>% # Spatial join block pts and UGBs
+                               select(InstName, instCode)) %>% # Keep only the UGB name and code variables
+  st_set_geometry(NULL) %>% # Remove the geometry from the block pts data frame
+  select(GEOID, InstName, instCode) %>% # Keep only the GEOID and UGB name & code variables
+  inner_join(dpsf_wide_bl_geo, . , by = c("GEOID" = "GEOID")) %>% # Join the block polygons and the block pts (with UGBs assigned)
+  select(GEOGRAPHY, GEOID, NAME, InstName, instCode, everything())
+```
+
+Join blocks and counties to retrieve county name per block.
+
+```{r}
+# Create temporary county data frame with geometry set to null.
+shp_co_temp <-  shp_co %>%
+  st_set_geometry(NULL) %>% # Remove geometry
+  mutate(COUNTY_NAME = NAME) %>% # Rename variable
+  mutate(COUNTY_GEOID = GEOID) %>% # Rename variable
+  select(COUNTY_GEOID, COUNTY_NAME)
+
+# Join blocks and counties to retrieve county name per block
+dpsf_wide_bl_geo <- dpsf_wide_bl_geo %>%
+  mutate(COUNTY_GEOID = substr(dpsf_wide_bl_geo$GEOID, 0, 5)) %>%
+  inner_join(shp_co_temp, by = c("COUNTY_GEOID" = "COUNTY_GEOID")) %>% # Inner join based on County GEOID
+  mutate(UGB_GEOG = case_when(is.na(InstName)~paste0("non-UGB County"), T~"UGB")) %>% # If InstName is NA, then UGB_GEOG is "non-UGB County", else "UGB"
+  mutate(InstName = case_when(is.na(InstName)~paste0(COUNTY_NAME), T~InstName)) %>% # If InstName is NA, then replace with County name
+  select(GEOGRAPHY, GEOID, NAME, InstName, instCode, UGB_GEOG, everything())
+
+remove(shp_co_temp)
+
+# Field map of blocks
+# Geographic identifiers: 9
+# Variables: 360 (120 * 3 [dp, sf, diff])
+# Geometry: 1
+# Total: 370
+# Obs: 196,621 (sum of all geographic entities)
+```
+
+Aggregate blocks to UGBs.
+
+```{r warning=FALSE}
+dpsf_wide_UGB_nonUGBcounty <- dpsf_wide_bl_geo %>%
+  st_drop_geometry() %>% # Remove the shape geometry using different method (rather than st_set_geometry(NULL))
+  select(-GEOGRAPHY, -GEOID, -NAME, -ORIG_NAME, -hh_avgsz_diff, -hh_avgsz_dp, -hh_avgsz_sf, -hu_occpan_occ_perc_diff, -hu_occpan_occ_perc_dp, -hu_occpan_occ_perc_sf, -hu_occpan_vac_perc_diff, -hu_occpan_vac_perc_dp, -hu_occpan_vac_perc_sf, -pop_sex_sexratio_diff, -pop_sex_sexratio_dp, -pop_sex_sexratio_sf) %>% # Remove block geographic identifiers and any calculated fields resulting from division
+  mutate(GEOGRAPHY = UGB_GEOG) %>%
+  select(-UGB_GEOG, -COUNTY_GEOID, -COUNTY_NAME) %>%
+  select(GEOGRAPHY, instCode, InstName, everything()) %>%
+  group_by(GEOGRAPHY, instCode, InstName) %>% # GroupBy key columns
+  summarise_all(~ sum(.)) %>% # Sum all block variable values per UGB using lamda
+  ungroup() # Ungroup to remove grouping functionality
+
+# Calculate additional variables
+dpsf_wide_UGB_nonUGBcounty <- dpsf_wide_UGB_nonUGBcounty %>%
+  mutate(hh_avgsz_dp = pop_hh_total_dp / hu_occpan_occ_tot_dp) %>%  # Calculate average household size
+  mutate(hu_occpan_occ_perc_dp = hu_occpan_occ_tot_dp / hu_occpan_total_dp) %>% # Calculate occupancy percentage
+  mutate(hu_occpan_vac_perc_dp = hu_occpan_vac_tot_dp / hu_occpan_total_dp) %>% # Calculate vacancy percentage
+  mutate(pop_sex_sexratio_dp = (pop_sex_m_tot_dp / pop_sex_f_tot_dp) * 100) %>% # Calculate sex ratio
+  mutate(hh_avgsz_sf = pop_hh_total_sf / hu_occpan_occ_tot_sf) %>%  # Calculate average household size
+  mutate(hu_occpan_occ_perc_sf = hu_occpan_occ_tot_sf / hu_occpan_total_sf) %>% # Calculate occupancy percentage
+  mutate(hu_occpan_vac_perc_sf = hu_occpan_vac_tot_sf / hu_occpan_total_sf) %>% # Calculate vacancy percentage
+  mutate(pop_sex_sexratio_sf = (pop_sex_m_tot_sf / pop_sex_f_tot_sf) * 100) %>% # Calculate sex ratio
+  mutate(hh_avgsz_diff = hh_avgsz_dp - hh_avgsz_sf) %>%  # Average household size difference
+  mutate(hu_occpan_occ_perc_diff = hu_occpan_occ_perc_dp - hu_occpan_occ_perc_sf) %>% # Occupancy percentage difference
+  mutate(hu_occpan_vac_perc_diff = hu_occpan_vac_perc_dp - hu_occpan_vac_perc_sf) %>% # Vacancy percentage difference
+  mutate(pop_sex_sexratio_diff = pop_sex_sexratio_dp - pop_sex_sexratio_sf) # Sex ratio difference
+
+# Join aggregated UGB data to UGB shapes
+dpsf_wide_UGB_geo <- shp_UGB2018 %>%
+  inner_join(filter(dpsf_wide_UGB_nonUGBcounty, GEOGRAPHY == "UGB"), by = c("InstName" = "InstName", "instCode" = "instCode")) %>% # Inner join based on InstName
+  mutate(NAME = InstName) %>%
+  mutate(GEOID = instCode) %>%
+  mutate(ORIG_NAME = NAME) %>%
+  select(-InstName, -instCode) %>%
+  select(GEOGRAPHY, GEOID, NAME, ORIG_NAME, everything())
+
+# Field map of UGBs
+# Geographic identifiers: 4
+# Variables: 360 (120 * 3 [dp, sf, diff])
+# Geometry: 1
+# Total: 365
+# Obs: 217
+```
+
+The inner join above drops the non-UGB county observations. Create spatial objects that represent the non-UGB areas and include corresponding attributes. Dissolve the non-UGB county block shapes. [Reference Dissolve polygons in R](https://philmikejones.me/tutorials/2015-09-03-dissolve-polygons-in-r/ "Reference Dissolve polygons in R")
+
+```{r}
+# Create data frame of unincorporated county observations
+# shp_nonUGBcounty <- dpsf_wide_bl_geo %>%
+  # filter(UGB_GEOG == "non-UGB County") # Query non-UGB county observations
+
+# shp_nonUGBcounty$area <- st_area(shp_nonUGBcounty) # Create an area variable
+
+# Dissolve the nonUGB county blocks by county
+# shp_nonUGBcounty <- shp_nonUGBcounty %>%
+  # group_by(InstName) %>% # GroupBy non-UGB county name
+  # summarise(area = sum(area)) %>% # Summarise/dissolve the shapes
+  # select(-area) # Remove the area variable
+```
+
+Review the non-UGB county spatial object and save out as an RDS file.
+
+```{r}
+# ggplot(shp_nonUGBcounty) + geom_sf()
+
+# saveRDS(shp_nonUGBcounty,"./Data/intermediates/shp_nonUGBcounty.rds")
+```
+
+Read in the non-UGB county spatial objects.
+
+```{r class.source = 'fold-show'}
+shp_nonUGBcounty <- readRDS(file = "./Data/intermediates/shp_nonUGBcounty.rds")
+```
+
+Join the non-UGB county spatial objects to the anti-join of the UGB attributes and UGB shape data frames.
+
+```{r class.source = 'fold-show'}
+# Join non-UGB county data to non-UGB county shapes
+dpsf_wide_nonUGBcounty_geo <- shp_nonUGBcounty %>%
+  inner_join(filter(dpsf_wide_UGB_nonUGBcounty, GEOGRAPHY == "non-UGB County"), by = c("InstName" = "InstName")) %>%
+  mutate(NAME = InstName) %>%
+  mutate(GEOID = instCode) %>%
+  mutate(ORIG_NAME = NAME) %>%
+  select(-InstName, -instCode) %>%
+  select(GEOGRAPHY, GEOID, NAME, ORIG_NAME, everything())
+
+# Field map of non-UGB counties
+# Geographic identifiers: 4
+# Variables: 360 (120 * 3 [dp, sf, diff])
+# Geometry: 1
+# Total: 365
+# Obs: 36
+```
+
+Union the UGB and non-UGB observations with the `dpsf_wide_geog_geo` data frame.
+
+```{r class.source = 'fold-show'}
+dpsf_wide_geog_geo <- rbind(dpsf_wide_geog_geo, dpsf_wide_UGB_geo, dpsf_wide_nonUGBcounty_geo)
+
+# Field map
+# Geographic identifiers: 4
+# Variables: 360 (120 * 3 [dp, sf, diff])
+# Geometry: 1
+# Total: 365
+# Obs: 197,382 (sum of all geographic entities)
+```
+
+Save out the UGB/non-UGB county and complete geographies data frames as RDS files.
+
+```{r}
+# Save out as RDS file
+# saveRDS(dpsf_wide_UGB_nonUGBcounty,"./Data/intermediates/dpsf_wide_UGB_nonUGBcounty.rds")
+# saveRDS(dpsf_wide_geog_geo,"./Data/intermediates/dpsf_wide_geog_geo.rds")
+```
+
+Remove the geographically subsetted data frames from the environment.
+
+```{r}
+# Remove the geographically subsetted data frames
+remove(dpsf_wide_bl_geo)
+remove(dpsf_wide_UGB_geo)
+remove(dpsf_wide_nonUGBcounty_geo)
+remove(dpsf_wide_UGB_nonUGBcounty)
+```
+
+If desired, subset the data by geography. Otherwise, manage as a single dataset that can be queried using the GEOGRAPHY variable.
+
+```{r}
+# dpsf_wide_co_geo <- dpsf_wide_geog_geo %>% 
+#   filter(GEOGRAPHY == "County")
+# dpsf_wide_cd_geo <- dpsf_wide_geog_geo %>% 
+#   filter(GEOGRAPHY == "Congressional District")
+# dpsf_wide_sldu_geo <- dpsf_wide_geog_geo %>% 
+#   filter(GEOGRAPHY == "State Legislative District Upper House")
+# dpsf_wide_sldl_geo <- dpsf_wide_geog_geo %>% 
+#   filter(GEOGRAPHY == "State Legislative District Lower House")
+# dpsf_wide_pl_geo <- dpsf_wide_geog_geo %>% 
+#   filter(GEOGRAPHY == "Place")
+# dpsf_wide_bl_geo <- dpsf_wide_geog_geo %>% 
+#   filter(GEOGRAPHY == "Block")
+# dpsf_wide_UGB_geo <- dpsf_wide_geog_geo %>% 
+#   filter(GEOGRAPHY == "UGB")
+# dpsf_wide_nonUGBcounty_geo <- dpsf_wide_geog_geo %>% 
+#   filter(GEOGRAPHY == "non-UGB County")
+```
+
+Remove blocks for visualization outside of R (in Esri ArcGIS).
+
+```{r}
+dpsf_wide_geog_geo_sans_bl <- dpsf_wide_geog_geo %>%
+  filter(GEOGRAPHY != "Block")
+```
+
+Save out as Esri feature class.
+
+```{r}
+# Use arc.write to save-as feature classes
+# arc.write often results in RStudio aborting; Ensuring correct names and using full paths seems to mitigate somewhat.
+# arc.write(path = "C:/Users/abrasch/Documents/AB/PSU/USP522 Practicum/Analysis/Data/GIS/USP522.gdb/dpsf_wide_geog_geo_sans_bl_fromR", data = dpsf_wide_geog_geo_sans_bl, overwrite = T)
+```
+
+# Data Visualization and Discussion
+
+Visualize the 2010 summary file and differentially private data using Esri ArcGIS Online, R ggplot2/plotly, and MS Excel.
+
+## Esri Dashboard
+
+The following section presents the steps taken to create an interactive dashboard using `Esri Operations Dashboard for ArcGIS` for users to compare key demographic indicators (e.g., population by race and ethnicity, population by 5-year age groups, average household size, occupancy rate, etc.) for Oregon geographies. 
+
+Reorder fields to more user-friendly format via Alteryx `USP522_GIS_FieldOrder.yxmd`. Esri does not recognize the projection file from R, so set to NAD83 (EPSG 4269) in Esri. Alteryx workflow uses the flexibility of the `Select` tool to manually rearrange the field order. Note that the dataset cannot export to a personal geodatabase to maintain the correct coordinate system (NAD83), because there are too many fields; therefore, export to file geodatabase, which defaults to WGS84 and, erroneously, does not apply transformation. In an Esri product, project to NAD83, accepting slight coordinate system shift (approximately 5 feet).
+
+Prepare a Python script to change field aliases via Alteryx `USP522_PRC_SF1_VariableSelection.yxmd`. The workflow prepares a dataset of variable names and corresponding aliases, which are then inserted into `arcpy.AlterField_management` functions. The Python script `Update_Aliases_dpsf_wide_geog_geo.py` is then run within an Esri product (i.e., ArcGIS Pro).
+
+Share the data to ArcGIS Online.
+
+Create a web map that includes layers for Oregon places, UGBs, counties, and non-UGB counties based on querying the GEOGRAPHY variable.
+
+Configure the layer pop-ups using ArcGIS Online (AGO) Assistant. View the web map's underlying JSON, particularly the `Data` component. Find and replace the decimal places parameter from `"places": 2,` to `places": 0,` for all variables that can be represented as whole numbers.
+
+Prepare a data frame of total population by 5-year age group to display the dashboard as a dual-series line chart via Alteryx `USP522_Pop_Cohort_GIS_Preparation.yxmd`. The workflow restructures the wide data frame into long format with a population group variable and two value columns, one for sf and the other for dp. Rename the variable values for labeling within dashboard chart.
+
+Create the dashboard using the `Esri Operations Dashboard for ArcGIS` graphical user interface; configure to include key demographic indicators, population by non-Hispanic / Latino race bar charts, Hispanic / Latino ethnicity pie charts, and total population by 5-year age groups.
+
+<span style="color: #BB86FC;">**Census 2010 Summary File 1 vs. Differential Privacy: Oregon Geographies - Esri Dashboard**</span>
+
+For best viewing and interactivity experience access via [this link](https://maulfoster.maps.arcgis.com/apps/opsdashboard/index.html#/6fea214d11784e5aa277157e8f5db3f0 "this link")
+
+<iframe src="https://maulfoster.maps.arcgis.com/apps/opsdashboard/index.html#/6fea214d11784e5aa277157e8f5db3f0" width="1500" height="1000" style="border: none;"></iframe>
+
+<span style="color: #BB86FC;">**Instructions—Read Before Use**</span>
+
+1. The primary way to select a geography is to access the dropdown lists above these instructions. This list is representative of the geographies in the map extent. Upon selection, the map will zoom-to the selected geography and the statistics will be updated. These lists select both Place & UGB, as well as County and non-County UGB.
+2. Alternatively, select a geography within the map extent by using the Select widget in the top left-hand corner of the map. Multiple selections are required to select both Place & UGB or County & non-UGB County. Upon selection, the map will zoom-to the selected geography and the statistics will be updated.
+3. Use the tabs below the statistics panels to view statistics per geography type (note that there are two main panels; the geography of interest must be chosen in both).
+4. Note that the Place/UGB and County/non-UGB county selections are independent of one another. If no selection is made for geography type, the statistics will reflect the geographies visible in the map extent.
+
+
+An exhaustive review of the considerable issues witnessed at the various levels of geography is outside the scope of this study, but users are encouraged to search for their areas-of-interest to review differences in values. A few notable examples of places where differences in variable values will adversely impact data products produced with the dp data include:
+
+- Port Orford: the change of average household size of just under 0.4 from sf value of 1.86 to dp value of 1.46 will impact population forecasts and housing needs analyses.
+- Detroit: Average household size of under 1 (dp value of 0.69) is nonsensical, since a household must by default include one or more persons.
+- Madras: Significant changes to non-white populations occur in the dp data.
+- Joseph & Enterprise: Considerably out-of-line population by 5-year age groups.
+
+The issues presented in the examples are not isolated incidents, but rather common occurrences in the dp data, especially in geographic areas with small populations.
+
+Additionally, create an Esri ArcGIS Online Swipe map to represent an extreme case of differences between the sf and dp values, particularly county occupancy rates. Swipe the map to compare the sf (top layer) and dp (bottom layer) county occupancy rate values, represented as choropleth maps. _Note that the Census Bureau is aware of the erroneous, 100% values that were assigned to some counties in eastern Oregon._
+
+<span style="color: #BB86FC;">**Differential Privacy vs. SF1: County Occupancy Rates in Oregon - Esri Swipe Map**</span>
+
+For the best viewing and interactivity experience, access the web map via [this link](https://maulfoster.maps.arcgis.com/apps/StorytellingSwipe/index.html?appid=5d4a8c67de254b3bbac2780226118739 "this link")
+
+<iframe src="https://maulfoster.maps.arcgis.com/apps/StorytellingSwipe/index.html?appid=5d4a8c67de254b3bbac2780226118739" width="1500" height="1000" style="border: none;"></iframe>
+
+## R Visualizations
+
+The following section presents the steps taken to create interactive data visualizations--produced using the R packages `ggplot2` and `plotly`--that highlight the differences between sf and dp values for key demographic variables.
+
+Create a visualization of the differences between sf and dp average household sizes per county.
+
+```{r fig.height=6, fig.width=8, warning=TRUE}
+plot_co_hh_avgsz_diff <- dpsf_wide_geog_geo_sans_bl %>%
+  filter(GEOGRAPHY == "County") %>%
+  mutate(highlight = ifelse(hh_avgsz_diff < -0.2, "> 0.2 difference", "< 0.2 difference")) %>%
+  ggplot(aes(x = hh_avgsz_diff, y = reorder(NAME, hh_avgsz_diff), fill = highlight, text = paste("County: ", NAME,
+                                                       "<br>SF Avg. HH Size: ", round(hh_avgsz_sf, digits = 2),
+                                                       "<br>DP Avg. HH Size: ", round(hh_avgsz_dp, digits = 2),
+                                                       "<br>Avg. HH Size Diff.: ", round(hh_avgsz_diff, digits = 4)))) + 
+  geom_point(size  = 2,
+             stroke = 0,
+             shape=16,
+             alpha = .9) +
+  scale_fill_manual(values=c("#2fbf71", "#4848ff")) +
+  xlab("Difference in Average Household Size") +
+  ylab("County") +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 12)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank()) +
+  theme(panel.background = element_rect(fill = "#1e1e1e")) +
+  theme(plot.background = element_rect(fill = "#1e1e1e")) +
+  theme(axis.text = element_text(size=8, color = "#808080"), axis.line = element_line(color = "#808080")) +
+  theme(axis.title = element_text(size=12, color = "white")) +
+  theme(legend.background = element_rect(fill="#808080", 
+                                  size=0.5, linetype="solid"))
+
+ggplotly(plot_co_hh_avgsz_diff, tooltip = "text")
+```
+
+Create a visualization of the differences between sf and dp occupancy rates per county.
+
+```{r fig.width=8, fig.height=6}
+plot_co_hu_occpan_occ_perc_diff <- dpsf_wide_geog_geo_sans_bl %>%
+  filter(GEOGRAPHY == "County") %>%
+  mutate(highlight = ifelse(hu_occpan_occ_perc_diff > 0.1, "> 0.1 difference", "< 0.1 difference")) %>%
+  ggplot(aes(x = hu_occpan_occ_perc_diff, y = reorder(NAME, hu_occpan_occ_perc_diff), fill = highlight, text = paste("County: ", NAME,
+                                                       "<br>SF Occ. Rate: ", round(hu_occpan_occ_perc_sf, digits = 2),
+                                                       "<br>DP Occ. Rate: ", round(hu_occpan_occ_perc_dp, digits = 2),
+                                                       "<br>Occ. Rate Diff.: ", round(hu_occpan_occ_perc_diff, digits = 4)))) + 
+  geom_point(size  = 2,
+             stroke = 0,
+             shape=16,
+             alpha = .9) +
+  scale_fill_manual(values=c("#2fbf71", "#4848ff")) +
+  xlab("Difference in Occupancy Rate") +
+  ylab("County") +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 12)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank()) +
+  theme(panel.background = element_rect(fill = "#1e1e1e")) +
+  theme(plot.background = element_rect(fill = "#1e1e1e")) +
+  theme(axis.text = element_text(size=8, color = "#808080"), axis.line = element_line(color = "#808080")) +
+  theme(axis.title = element_text(size=12, color = "white")) +
+  theme(legend.background = element_rect(fill="#808080", 
+                                  size=0.5, linetype="solid"))
+
+ggplotly(plot_co_hu_occpan_occ_perc_diff, tooltip = "text")
+```
+
+Create a data frame of counties that denotes whether the county is classified as rural. "Rural" is an inexact term, capturing quantitative measures like population density as well as qualitative measures like community values. Despite this, there are three agencies with similar, widely-used definitions. Although the Census Bureau, Office of Management and Budget (OMB), and Federal Office of Rural Health Policy use different methodologies to define rural, all three determine the same 23 Oregon counties as being rural, as of 2018. For more information of this topic, see the following resources:
+
+[Health Resources and Services Administration: Defining Rural Population](https://www.hrsa.gov/rural-health/about-us/definition/index.html "Health Resources and Services Administration: Defining Rural Population")  
+[Health Resources and Services Administration: List of Rural Counties](https://www.hrsa.gov/sites/default/files/hrsa/ruralhealth/resources/forhpeligibleareas.pdf "Health Resources and Services Administration: List of Rural Counties")  
+[Rural Health Information Hub: What is Rural](https://www.ruralhealthinfo.org/topics/what-is-rural "Rural Health Information Hub: What is Rural")  
+[United States Office of Management and Budget: Metropolitan and Micropolitan](https://www.census.gov/programs-surveys/metro-micro.html "United States Office of Management and Budget: Metropolitan and Micropolitan")  
+[University of Montana Rural Institute: OMB County Classifications](http://rtc.ruralinstitute.umt.edu/research-findings/geography/county-classification/ "University of Montana Rural Institute: OMB County Classifications")  
+
+```{r}
+co_rural <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>%
+  filter(GEOGRAPHY == "County") %>%
+  select(NAME) %>%
+  mutate(Rural = ifelse(NAME %in% c('Baker','Clatsop','Coos','Crook','Curry','Douglas','Gilliam','Grant','Harney','Hood River','Jefferson','Klamath','Lake','Lincoln','Malheur','Morrow','Sherman','Tillamook','Umatilla','Union','Wallowa','Wasco','Wheeler'), "Y", "N"))
+```
+
+Recreate the visualization of the differences between sf and dp average household sizes per county, depicting rural vs. metropolitan counties. Note that the largest differences disproportionately occur in rural counties.
+
+```{r fig.width=8, fig.height=6}
+plot_co_hh_avgsz_diff_rural <- dpsf_wide_geog_geo_sans_bl %>%
+  filter(GEOGRAPHY == "County") %>%
+  mutate(Rural = ifelse(NAME %in% c('Baker','Clatsop','Coos','Crook','Curry','Douglas','Gilliam','Grant','Harney','Hood River','Jefferson','Klamath','Lake','Lincoln','Malheur','Morrow','Sherman','Tillamook','Umatilla','Union','Wallowa','Wasco','Wheeler'), "Rural ", "Metropolitan")) %>%
+  ggplot(aes(x = hh_avgsz_diff, y = reorder(NAME, hh_avgsz_diff), fill = Rural, text = paste("County: ", NAME,
+                                                       "<br>SF Avg. HH Size: ", round(hh_avgsz_sf, digits = 2),
+                                                       "<br>DP Avg. HH Size: ", round(hh_avgsz_dp, digits = 2),
+                                                       "<br>Avg. HH Size Diff.: ", round(hh_avgsz_diff, digits = 4)))) + 
+  geom_point(size  = 2,
+             stroke = 0,
+             shape=16,
+             alpha = .9) +
+  scale_fill_manual(values=c("#2fbf71", "#4848ff")) +
+  xlab("Difference in Average Household Size") +
+  ylab("County") +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 12)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank()) +
+  theme(panel.background = element_rect(fill = "#1e1e1e")) +
+  theme(plot.background = element_rect(fill = "#1e1e1e")) +
+  theme(axis.text = element_text(size=8, color = "#808080"), axis.line = element_line(color = "#808080")) +
+  theme(axis.title = element_text(size=12, color = "white")) +
+  theme(legend.background = element_rect(fill="#808080", 
+                                  size=0.5, linetype="solid"))
+
+ggplotly(plot_co_hh_avgsz_diff_rural, tooltip = "text")
+```
+
+Recreate the visualization of the differences between sf and dp occupancy rates per county, depicting rural vs. metropolitan counties. Note that the largest differences disproportionately occur in rural counties.
+
+```{r fig.width=8, fig.height=6}
+plot_co_hu_occpan_occ_perc_diff_rural <- dpsf_wide_geog_geo_sans_bl %>%
+  filter(GEOGRAPHY == "County") %>%
+  mutate(Rural = ifelse(NAME %in% c('Baker','Clatsop','Coos','Crook','Curry','Douglas','Gilliam','Grant','Harney','Hood River','Jefferson','Klamath','Lake','Lincoln','Malheur','Morrow','Sherman','Tillamook','Umatilla','Union','Wallowa','Wasco','Wheeler'), "Rural ", "Metropolitan")) %>%
+  ggplot(aes(x = hu_occpan_occ_perc_diff, y = reorder(NAME, hu_occpan_occ_perc_diff), fill = Rural, text = paste("County: ", NAME,
+                                                       "<br>SF Occ. Rate: ", round(hu_occpan_occ_perc_sf, digits = 2),
+                                                       "<br>DP Occ. Rate: ", round(hu_occpan_occ_perc_dp, digits = 2),
+                                                       "<br>Occ. Rate Diff.: ", round(hu_occpan_occ_perc_diff, digits = 4)))) + 
+  geom_point(size  = 2,
+             stroke = 0,
+             shape=16,
+             alpha = .9) +
+  scale_fill_manual(values=c("#2fbf71", "#4848ff")) +
+  xlab("Difference in Occupancy Rate") +
+  ylab("County") +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 12)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank()) +
+  theme(panel.background = element_rect(fill = "#1e1e1e")) +
+  theme(plot.background = element_rect(fill = "#1e1e1e")) +
+  theme(axis.text = element_text(size=8, color = "#808080"), axis.line = element_line(color = "#808080")) +
+  theme(axis.title = element_text(size=12, color = "white")) +
+  theme(legend.background = element_rect(fill="#808080", 
+                                  size=0.5, linetype="solid"))
+
+ggplotly(plot_co_hu_occpan_occ_perc_diff_rural, tooltip = "text")
+```
+
+Create a visualization of the differences between sf and dp population by age group per county.
+
+```{r fig.width=10, fig.height=6}
+co_age_group_diff <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>%
+  filter(GEOGRAPHY == "County") %>%
+  select(NAME, pop_sex_tot_00_04_diff, pop_sex_tot_05_09_diff, pop_sex_tot_10_14_diff, pop_sex_tot_15_19_diff, pop_sex_tot_20_24_diff, pop_sex_tot_25_29_diff, pop_sex_tot_30_34_diff, pop_sex_tot_35_39_diff, pop_sex_tot_40_44_diff, pop_sex_tot_45_49_diff, pop_sex_tot_50_54_diff, pop_sex_tot_55_59_diff, pop_sex_tot_60_64_diff, pop_sex_tot_65_69_diff, pop_sex_tot_70_74_diff, pop_sex_tot_75_79_diff, pop_sex_tot_80_84_diff, pop_sex_tot_85_over_diff) %>%
+  gather(variable, diff, -NAME) %>%
+  mutate(age_group = str_replace(variable, "_diff", ""))
+
+co_age_group_sf <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>%
+  filter(GEOGRAPHY == "County") %>%
+  select(NAME, pop_sex_tot_00_04_sf, pop_sex_tot_05_09_sf, pop_sex_tot_10_14_sf, pop_sex_tot_15_19_sf, pop_sex_tot_20_24_sf, pop_sex_tot_25_29_sf, pop_sex_tot_30_34_sf, pop_sex_tot_35_39_sf, pop_sex_tot_40_44_sf, pop_sex_tot_45_49_sf, pop_sex_tot_50_54_sf, pop_sex_tot_55_59_sf, pop_sex_tot_60_64_sf, pop_sex_tot_65_69_sf, pop_sex_tot_70_74_sf, pop_sex_tot_75_79_sf, pop_sex_tot_80_84_sf, pop_sex_tot_85_over_sf) %>%
+  gather(variable, sf, -NAME) %>%
+  mutate(age_group = str_replace(variable, "_sf", ""))
+
+co_age_group_dp <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>%
+  filter(GEOGRAPHY == "County") %>%
+  select(NAME, pop_sex_tot_00_04_dp, pop_sex_tot_05_09_dp, pop_sex_tot_10_14_dp, pop_sex_tot_15_19_dp, pop_sex_tot_20_24_dp, pop_sex_tot_25_29_dp, pop_sex_tot_30_34_dp, pop_sex_tot_35_39_dp, pop_sex_tot_40_44_dp, pop_sex_tot_45_49_dp, pop_sex_tot_50_54_dp, pop_sex_tot_55_59_dp, pop_sex_tot_60_64_dp, pop_sex_tot_65_69_dp, pop_sex_tot_70_74_dp, pop_sex_tot_75_79_dp, pop_sex_tot_80_84_dp, pop_sex_tot_85_over_dp) %>%
+  gather(variable, dp, -NAME) %>%
+  mutate(age_group = str_replace(variable, "_dp", ""))
+
+co_pop_total <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>%
+  filter(GEOGRAPHY == "County") %>%
+  select(NAME, pop_total_sf) %>%
+  gather(variable, pop_total, -NAME)
+
+plot_co_pop_sexbyage_diffperc_totpop <- co_age_group_diff %>%
+  inner_join(co_age_group_sf, by = c("NAME", "age_group")) %>%
+  inner_join(co_age_group_dp, by = c("NAME", "age_group")) %>%
+  inner_join(co_pop_total, by = c("NAME")) %>%
+  select(NAME, age_group, diff, sf, dp, pop_total) %>%
+  mutate(diff_perc = (diff / sf) * 100) %>%
+  mutate(diff_perc_viz = ifelse(diff_perc > 150, 150, diff_perc)) %>%
+  mutate(age_group = str_replace(age_group, "pop_sex_tot_", "")) %>%
+  mutate(age_group = str_replace(age_group, "_", "-")) %>%
+  mutate(age_group = str_replace(age_group, "85-over", "85+")) %>%
+  ggplot(aes(x = age_group, y = reorder(NAME, pop_total), fill = diff_perc_viz,  text = paste("County: ", NAME,
+                                                       "<br>Age Group: ", age_group,
+                                                       "<br>SF Pop.: ", sf,
+                                                       "<br>DP Pop.: ", dp,
+                                                       "<br>Difference: ", diff,
+                                                       "<br>% Difference: ", round(diff_perc, digits = 2), "%"))) + 
+  geom_tile() +
+  scale_fill_viridis_c(name = "Pop. % Diff.") +
+  xlab("Population by Age Group") +
+  ylab("County (Sorted by Total Population)") +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank()) +
+  theme(panel.background = element_rect(fill = "#1e1e1e")) +
+  theme(plot.background = element_rect(fill = "#1e1e1e")) +
+  theme(axis.text = element_text(size=8, color = "#808080"), axis.line = element_line(color = "#808080")) +
+  theme(axis.title = element_text(size=12, color = "white")) +
+  theme(legend.background = element_rect(fill="#808080", 
+                                  size=0.5, linetype="solid"))
+
+ggplotly(plot_co_pop_sexbyage_diffperc_totpop, tooltip = "text")
+
+# plotly_co_pop_sexbyage_diffperc_totpop <- ggplotly(plot_co_pop_sexbyage_diffperc_totpop, tooltip = "text")
+# saveWidget(as_widget(plotly_co_pop_sexbyage_diffperc_totpop), "plotly_co_pop_sexbyage_diffperc_totpop.html")
+
+remove(co_age_group_diff)
+remove(co_age_group_sf)
+remove(co_age_group_dp)
+remove(co_pop_total)
+```
+
+Create a visualization of the differences between sf and dp population by age group per place.
+
+```{r fig.width=10, fig.height=36}
+pl_age_group_diff <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>%
+  filter(GEOGRAPHY == "Place") %>%
+  select(NAME, pop_sex_tot_00_04_diff, pop_sex_tot_05_09_diff, pop_sex_tot_10_14_diff, pop_sex_tot_15_19_diff, pop_sex_tot_20_24_diff, pop_sex_tot_25_29_diff, pop_sex_tot_30_34_diff, pop_sex_tot_35_39_diff, pop_sex_tot_40_44_diff, pop_sex_tot_45_49_diff, pop_sex_tot_50_54_diff, pop_sex_tot_55_59_diff, pop_sex_tot_60_64_diff, pop_sex_tot_65_69_diff, pop_sex_tot_70_74_diff, pop_sex_tot_75_79_diff, pop_sex_tot_80_84_diff, pop_sex_tot_85_over_diff) %>%
+  gather(variable, diff, -NAME) %>%
+  mutate(age_group = str_replace(variable, "_diff", ""))
+
+pl_age_group_sf <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>%
+  filter(GEOGRAPHY == "Place") %>%
+  select(NAME, pop_sex_tot_00_04_sf, pop_sex_tot_05_09_sf, pop_sex_tot_10_14_sf, pop_sex_tot_15_19_sf, pop_sex_tot_20_24_sf, pop_sex_tot_25_29_sf, pop_sex_tot_30_34_sf, pop_sex_tot_35_39_sf, pop_sex_tot_40_44_sf, pop_sex_tot_45_49_sf, pop_sex_tot_50_54_sf, pop_sex_tot_55_59_sf, pop_sex_tot_60_64_sf, pop_sex_tot_65_69_sf, pop_sex_tot_70_74_sf, pop_sex_tot_75_79_sf, pop_sex_tot_80_84_sf, pop_sex_tot_85_over_sf) %>%
+  gather(variable, sf, -NAME) %>%
+  mutate(age_group = str_replace(variable, "_sf", ""))
+
+pl_age_group_dp <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>%
+  filter(GEOGRAPHY == "Place") %>%
+  select(NAME, pop_sex_tot_00_04_dp, pop_sex_tot_05_09_dp, pop_sex_tot_10_14_dp, pop_sex_tot_15_19_dp, pop_sex_tot_20_24_dp, pop_sex_tot_25_29_dp, pop_sex_tot_30_34_dp, pop_sex_tot_35_39_dp, pop_sex_tot_40_44_dp, pop_sex_tot_45_49_dp, pop_sex_tot_50_54_dp, pop_sex_tot_55_59_dp, pop_sex_tot_60_64_dp, pop_sex_tot_65_69_dp, pop_sex_tot_70_74_dp, pop_sex_tot_75_79_dp, pop_sex_tot_80_84_dp, pop_sex_tot_85_over_dp) %>%
+  gather(variable, dp, -NAME) %>%
+  mutate(age_group = str_replace(variable, "_dp", ""))
+
+pl_pop_total <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>%
+  filter(GEOGRAPHY == "Place") %>%
+  select(NAME, pop_total_sf) %>%
+  gather(variable, pop_total, -NAME)
+
+plot_pl_pop_sexbyage_diffperc_totpop <- pl_age_group_diff %>%
+  inner_join(pl_age_group_sf, by = c("NAME", "age_group")) %>%
+  inner_join(pl_age_group_dp, by = c("NAME", "age_group")) %>%
+  inner_join(pl_pop_total, by = c("NAME")) %>%
+  select(NAME, age_group, diff, sf, dp, pop_total) %>%
+  mutate(diff_perc = (diff / sf) * 100) %>%
+  mutate(diff_perc_viz = ifelse(diff_perc > 150, 150, diff_perc)) %>%
+  mutate(age_group = str_replace(age_group, "pop_sex_tot_", "")) %>%
+  mutate(age_group = str_replace(age_group, "_", "-")) %>%
+  mutate(age_group = str_replace(age_group, "85-over", "85+")) %>%
+  ggplot(aes(x = age_group, y = reorder(NAME, pop_total), fill = diff_perc_viz,  text = paste("Place: ", NAME,
+                                                       "<br>Age Group: ", age_group,
+                                                       "<br>SF Pop.: ", sf,
+                                                       "<br>DP Pop.: ", dp,
+                                                       "<br>Difference: ", diff,
+                                                       "<br>% Difference: ", round(diff_perc, digits = 2), "%"))) + 
+  geom_tile() +
+  scale_fill_viridis_c(name = "Pop. % Diff.") +
+  xlab("Population by Age Group") +
+  ylab("Place (Sorted by Total Population)") +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank()) +
+  theme(panel.background = element_rect(fill = "#1e1e1e")) +
+  theme(plot.background = element_rect(fill = "#1e1e1e")) +
+  theme(axis.text = element_text(size=7, color = "#808080"), axis.line = element_line(color = "#808080")) +
+  theme(axis.title = element_text(size=12, color = "white")) +
+  theme(legend.background = element_rect(fill="#808080", 
+                                  size=0.5, linetype="solid"))
+
+ggplotly(plot_pl_pop_sexbyage_diffperc_totpop, tooltip = "text") # height = 4000
+
+remove(pl_age_group_diff)
+remove(pl_age_group_sf)
+remove(pl_age_group_dp)
+remove(pl_pop_total)
+```
+
+Create data frames of places and UGBs that denote whether the places and UGBs have populations less than 8,000.
+
+The Oregon Population Forecast Program (OPFP) uses the housing unit (HU) method to forecast future population for small Oregon cities (less than 8,000 inhabitants) because the approach has proven to perform particularly well at the subcounty level. The data required by the HU method—housing units, occupancy rate, and persons per household (PPH, a.k.a. average household size)—are readily available for most subcounty areas and tend to be more reliable than the data required by other methods (e.g., cohort-component model). However, one of the challenges to producing accurate forecasts for small areas with the HU method is quantifying and accounting for the impact of local and regional factors on PPH and occupancy rates. As seen in the charts below, differential privacy presents further challenges to accurate estimation.
+  
+```{r}
+pl_less8k <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>%
+  filter(GEOGRAPHY == "Place") %>%
+  select(NAME, pop_total_sf) %>%
+  mutate(Less8k = ifelse(pop_total_sf < 8000, "Y", "N")) %>%
+  select(NAME, Less8k)
+```
+
+Create a visualization comparing sf and dp total population per place with (sf) population less than 8,000.
+
+```{r fig.width=8, fig.height=6}
+plot_pl_pop_total <- dpsf_wide_geog_geo_sans_bl %>%
+  filter(GEOGRAPHY == "Place") %>%
+  filter(pop_total_sf < 8000) %>%
+  ggplot(aes(x = pop_total_sf, y = pop_total_dp, text = paste("Place: ", NAME,
+                                                       "<br>SF Pop.: ", round(pop_total_sf, digits = 2),
+                                                       "<br>DP Pop.: ", round(pop_total_dp, digits = 2),
+                                                       "<br>Pop. Diff.: ", round(pop_total_diff, digits = 4)))) + 
+  geom_point(size  = 2,
+             stroke = 0,
+             shape=19,
+             alpha = .9,
+             color = "#2fbf71") +
+  geom_abline(color = "#4848ff") +
+  xlab("SF Total Population") +
+  ylab("DP Total Population") +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 12)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank()) +
+  theme(panel.background = element_rect(fill = "#1e1e1e")) +
+  theme(plot.background = element_rect(fill = "#1e1e1e")) +
+  theme(axis.text = element_text(size=8, color = "#808080"), axis.line = element_line(color = "#808080")) +
+  theme(axis.title = element_text(size=12, color = "white")) +
+  theme(legend.background = element_rect(fill="#808080", 
+                                  size=0.5, linetype="solid"))
+
+ggplotly(plot_pl_pop_total, tooltip = "text")
+```
+
+Create a visualization comparing sf and dp average household size per place with (sf) population less than 8,000.
+
+```{r fig.width=8, fig.height=6}
+plot_pl_hh_avgsz <- dpsf_wide_geog_geo_sans_bl %>%
+  filter(GEOGRAPHY == "Place") %>%
+  filter(pop_total_sf < 8000) %>%
+  ggplot(aes(x = hh_avgsz_sf, y = hh_avgsz_dp, text = paste("Place: ", NAME,
+                                                       "<br>SF Avg. HH Size: ", round(hh_avgsz_sf, digits = 2),
+                                                       "<br>DP Avg. HH Size: ", round(hh_avgsz_dp, digits = 2),
+                                                       "<br>Avg. HH Size Diff.: ", round(hh_avgsz_diff, digits = 4)))) + 
+  geom_point(size  = 2,
+             stroke = 0,
+             shape=19,
+             alpha = .9,
+             color = "#2fbf71") +
+  expand_limits(x = 0, y = 0) +
+  geom_abline(color = "#4848ff") +
+  xlab("SF Average Household Size") +
+  ylab("DP Average Household Size") +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 12)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank()) +
+  theme(panel.background = element_rect(fill = "#1e1e1e")) +
+  theme(plot.background = element_rect(fill = "#1e1e1e")) +
+  theme(axis.text = element_text(size=8, color = "#808080"), axis.line = element_line(color = "#808080")) +
+  theme(axis.title = element_text(size=12, color = "white")) +
+  theme(legend.background = element_rect(fill="#808080", 
+                                  size=0.5, linetype="solid"))
+
+ggplotly(plot_pl_hh_avgsz, tooltip = "text")
+```
+
+Create a visualization comparing sf and dp occupancy rate per place with (sf) population less than 8,000.
+
+```{r fig.width=8, fig.height=6}
+plot_pl_hh_hu_occpan_occ_perc <- dpsf_wide_geog_geo_sans_bl %>%
+  filter(GEOGRAPHY == "Place") %>%
+  filter(pop_total_sf < 8000) %>%
+  ggplot(aes(x = hu_occpan_occ_perc_sf, y = hu_occpan_occ_perc_dp, text = paste("Place: ", NAME,
+                                                       "<br>SF Occ. Rate: ", round(hu_occpan_occ_perc_sf, digits = 2),
+                                                       "<br>DP Occ. Rate: ", round(hu_occpan_occ_perc_dp, digits = 2),
+                                                       "<br>Occ. Rate Diff.: ", round(hu_occpan_occ_perc_diff, digits = 4)))) + 
+  geom_point(size  = 2,
+             stroke = 0,
+             shape=19,
+             alpha = .9,
+             color = "#2fbf71") +
+  expand_limits(x = 0, y = 0) +
+  geom_abline(color = "#4848ff") +
+  xlab("SF Occupancy Rate") +
+  ylab("DP Occupancy Rate") +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 12)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank()) +
+  theme(panel.background = element_rect(fill = "#1e1e1e")) +
+  theme(plot.background = element_rect(fill = "#1e1e1e")) +
+  theme(axis.text = element_text(size=8, color = "#808080"), axis.line = element_line(color = "#808080")) +
+  theme(axis.title = element_text(size=12, color = "white")) +
+  theme(legend.background = element_rect(fill="#808080", 
+                                  size=0.5, linetype="solid"))
+
+ggplotly(plot_pl_hh_hu_occpan_occ_perc, tooltip = "text")
+```
+
+## MS Excel Charts
+
+The following section presents the steps taken to create interactive MS Excel charts for users to compare county fertility rates and net migration rates--two variables that are often essential to the preparation of population forecasts.
+
+Population forecasts are important planning tools for the public and private sector. In Oregon, population forecasts are essential to the land use and housing planning, because beginning in 1973 with the passage of Senate Bill (SB) 100, Oregon’s growth management system has relied on population forecasts as the primary tool for determining UGB expansions, as well as for crafting planning policy (PSU PRC OPFP 2020). The task of preparing forecasts was once left to city and county officials, but in an effort to increase consistency of methods and timely updates, the Oregon House of Representatives and Senate approved legislation in 2013 assigning coordinated population forecasting to the PSU PRC (PSU PRC OPFP 2020). To illustrate the effects of differential privacy on the OPFP's forecasting method used for counties and cities with populations over 8,000 (cohort-component model), variables of the model were derived from dp and sf demographic data.
+
+### Fertility
+
+The cohort-component model utilizes age group-specific fertility rates, which are calculated based on the population of child-bearing age females in 5-year age groups between the ages of 10 and 49 and the average number of births per age group. The PSU PRC compiled 1999-2017 births data for Oregon counties from annual reports published by the Oregon Health Authority. The following section wrangles the births data and calculates the average number of births per age age (2009-2011), fertility rates per age group, and total fertility rates (TFR).
+
+Read in the Oregon births data.
+
+```{r class.source = 'fold-show'}
+co_births <- read_excel("./Data/PSU PRC/county_births_wide.xlsx", sheet = "county_births_wide") # from the readxl package
+```
+
+Wrangle the births data, including removal of non-county columns and restructuring to long(er) format (i.e., counties as rows instead of columns).
+
+```{r class.source = 'fold-show'}
+co_births_long_all <- co_births %>%
+  select(-region3, -Oregon, -Unknown) %>% # Remove non-county columns
+  rename("Hood River" = HoodRiver) %>% # Remove space
+  gather(County, value, Baker:Yamhill) # Gather the county columns to make the data frame more tidy/long
+```
+
+Query 2009-2011 data to produce a 3-year average of births per county by age group.
+
+```{r class.source = 'fold-show'}
+co_births_long_avg <- co_births_long_all %>%
+  filter(year %in% c("2009", "2010", "2011")) %>% # Query 2009-2011 data
+  group_by(age_group, County) %>% # GroupBy categorical variaables
+  summarise(births_avg = mean(value)) %>% # Calculate average births (2009-2011) per cohort
+  ungroup() %>%
+  mutate(age_group = paste0("births_avg_",age_group)) # Add prefix to age group columns names
+```
+
+Restructure the births to wide format (i.e., one row per county with variables as columns).
+
+```{r class.source = 'fold-show'}
+co_births_wide_avg <- co_births_long_avg %>%
+  spread(age_group, births_avg) # Spread the data frame into wide format with one observation per county
+```
+
+Join births data to a county dp/sf data frame that includes female population by child-bearing age group.
+
+```{r class.source = 'fold-show'}
+dpsf_wide_co_births <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>% # Remove geometry
+  filter(GEOGRAPHY == "County") %>% # Query county observations
+  select(GEOGRAPHY, GEOID, NAME, ORIG_NAME, pop_sex_f_10_14_sf, pop_sex_f_15_19_sf, pop_sex_f_20_24_sf, pop_sex_f_25_29_sf, pop_sex_f_30_34_sf, pop_sex_f_35_39_sf, pop_sex_f_40_44_sf, pop_sex_f_45_49_sf, pop_sex_f_10_14_dp, pop_sex_f_15_19_dp, pop_sex_f_20_24_dp, pop_sex_f_25_29_dp, pop_sex_f_30_34_dp, pop_sex_f_35_39_dp, pop_sex_f_40_44_dp, pop_sex_f_45_49_dp) %>% # Keep only necessary variables
+  inner_join(co_births_wide_avg, by = c('NAME' = 'County')) %>% # Join the births data to the dp/sf county data frame
+  arrange(NAME) # Sort by county name
+``` 
+
+Calculate fertility rates per age group and TFRs based on sf and dp values, followed by the differences between sf and dp fertility rates and TFRs.
+
+Fertility Rate:
+
+ - fertility rate 10-14 sf = average births 10-14 / female population 10-14 df
+
+TFR:
+
+- TFR sf = (fertility rate 10-14 sf + fertility rate 15-19 sf + fertility rate 20-24 sf + fertility rate 25-29 sf+ fertility rate 30-34 sf + fertility rate 35-39 sf + fertility rate 40-44 sf + fertility rate 45-49 sf) * 5
+
+```{r}
+dpsf_wide_co_births_fert <- dpsf_wide_co_births %>%
+  mutate(fertrate_10_14_sf = births_avg_10_14 / pop_sex_f_10_14_sf, 
+         fertrate_15_19_sf = births_avg_15_19 / pop_sex_f_15_19_sf, 
+         fertrate_20_24_sf = births_avg_20_24 / pop_sex_f_20_24_sf,
+         fertrate_25_29_sf = births_avg_25_29 / pop_sex_f_25_29_sf, 
+         fertrate_30_34_sf = births_avg_30_34 / pop_sex_f_30_34_sf, 
+         fertrate_35_39_sf = births_avg_35_39 / pop_sex_f_35_39_sf, 
+         fertrate_40_44_sf = births_avg_40_44 / pop_sex_f_40_44_sf, 
+         fertrate_45_49_sf = births_avg_45_49 / pop_sex_f_45_49_sf,
+         fertrate_10_14_dp = births_avg_10_14 / pop_sex_f_10_14_dp, 
+         fertrate_15_19_dp = births_avg_15_19 / pop_sex_f_15_19_dp, 
+         fertrate_20_24_dp = births_avg_20_24 / pop_sex_f_20_24_dp,
+         fertrate_25_29_dp = births_avg_25_29 / pop_sex_f_25_29_dp, 
+         fertrate_30_34_dp = births_avg_30_34 / pop_sex_f_30_34_dp, 
+         fertrate_35_39_dp = births_avg_35_39 / pop_sex_f_35_39_dp, 
+         fertrate_40_44_dp = births_avg_40_44 / pop_sex_f_40_44_dp, 
+         fertrate_45_49_dp = births_avg_45_49 / pop_sex_f_45_49_dp,
+         fertrate_10_14_diff = fertrate_10_14_dp - fertrate_10_14_sf, 
+         fertrate_15_19_diff = fertrate_15_19_dp - fertrate_15_19_sf,
+         fertrate_20_24_diff = fertrate_20_24_dp - fertrate_20_24_sf,
+         fertrate_25_29_diff = fertrate_25_29_dp - fertrate_25_29_sf, 
+         fertrate_30_34_diff = fertrate_30_34_dp - fertrate_30_34_sf, 
+         fertrate_35_39_diff = fertrate_35_39_dp - fertrate_35_39_sf, 
+         fertrate_40_44_diff = fertrate_40_44_dp - fertrate_40_44_sf, 
+         fertrate_45_49_diff = fertrate_45_49_dp - fertrate_45_49_sf) %>% # Calculate fertiity rates per age group for sf and dp data and the difference
+  mutate(TFR_sf = (fertrate_10_14_sf + fertrate_15_19_sf + fertrate_20_24_sf + fertrate_25_29_sf + fertrate_30_34_sf + fertrate_35_39_sf + fertrate_40_44_sf + fertrate_45_49_sf) * 5) %>% # Calculate sf TFR
+  mutate(TFR_dp = (fertrate_10_14_dp + fertrate_15_19_dp + fertrate_20_24_dp + fertrate_25_29_dp + fertrate_30_34_dp + fertrate_35_39_dp + fertrate_40_44_dp + fertrate_45_49_dp) * 5) %>% # Calculate dp TFR
+  mutate(TFR_diff = TFR_dp - TFR_sf) %>% # Calculate TFR difference
+  mutate_if(is.numeric, list(~na_if(., Inf))) %>% # Convert infinity values to NA values (for export purposes)
+  arrange(desc(TFR_diff)) # Sort by descending order of TFR differences
+```
+
+Export to Excel to review data.
+
+```{r}
+# write_xlsx(list('co_births_fert' = dpsf_wide_co_births_fert), "./Data/dpsf_wide_co_births_fertility.xlsx")
+```
+
+_Infinity value and erroneously high TFRs are produced by extremely low numbers of females in particular age cohorts within the dp data. For instance, Wheeler County's sf 15-19 female population is 29, whereas the dp value is 0._
+
+Combine Gilliam, Sherman, and Wheeler counties into a single entity (sum population per age group and average number of births per age group) and recalculate fertility rates and TFRs.
+
+```{r}
+dpsf_wide_co_births_GSWonly <- dpsf_wide_co_births %>%
+  filter(NAME %in% c("Wheeler", "Sherman", "Gilliam")) %>% # Query counties with erroneous values
+  select(-GEOGRAPHY, -GEOID, -NAME, -ORIG_NAME) %>% # Remove cateogorical variables
+  summarise_all(sum) %>% # Sum all numeric variables
+  mutate(GEOGRAPHY = "County", NAME = "Gilliam-Sherman-Wheeler") # Create new categorical variables
+
+dpsf_wide_co_births_GSW <- dpsf_wide_co_births %>%
+  filter(!NAME %in% c("Wheeler", "Sherman", "Gilliam")) %>% # Remove counties with erroneous values
+  bind_rows(dpsf_wide_co_births_GSWonly) # Union data frames
+
+remove(dpsf_wide_co_births_GSWonly) # Remove intermediate data frame
+
+dpsf_wide_co_births_fert_GSW <- dpsf_wide_co_births_GSW %>%
+  mutate(fertrate_10_14_sf = births_avg_10_14 / pop_sex_f_10_14_sf, 
+         fertrate_15_19_sf = births_avg_15_19 / pop_sex_f_15_19_sf, 
+         fertrate_20_24_sf = births_avg_20_24 / pop_sex_f_20_24_sf,
+         fertrate_25_29_sf = births_avg_25_29 / pop_sex_f_25_29_sf, 
+         fertrate_30_34_sf = births_avg_30_34 / pop_sex_f_30_34_sf, 
+         fertrate_35_39_sf = births_avg_35_39 / pop_sex_f_35_39_sf, 
+         fertrate_40_44_sf = births_avg_40_44 / pop_sex_f_40_44_sf, 
+         fertrate_45_49_sf = births_avg_45_49 / pop_sex_f_45_49_sf,
+         fertrate_10_14_dp = births_avg_10_14 / pop_sex_f_10_14_dp, 
+         fertrate_15_19_dp = births_avg_15_19 / pop_sex_f_15_19_dp, 
+         fertrate_20_24_dp = births_avg_20_24 / pop_sex_f_20_24_dp,
+         fertrate_25_29_dp = births_avg_25_29 / pop_sex_f_25_29_dp, 
+         fertrate_30_34_dp = births_avg_30_34 / pop_sex_f_30_34_dp, 
+         fertrate_35_39_dp = births_avg_35_39 / pop_sex_f_35_39_dp, 
+         fertrate_40_44_dp = births_avg_40_44 / pop_sex_f_40_44_dp, 
+         fertrate_45_49_dp = births_avg_45_49 / pop_sex_f_45_49_dp,
+         fertrate_10_14_diff = fertrate_10_14_dp - fertrate_10_14_sf, 
+         fertrate_15_19_diff = fertrate_15_19_dp - fertrate_15_19_sf,
+         fertrate_20_24_diff = fertrate_20_24_dp - fertrate_20_24_sf,
+         fertrate_25_29_diff = fertrate_25_29_dp - fertrate_25_29_sf, 
+         fertrate_30_34_diff = fertrate_30_34_dp - fertrate_30_34_sf, 
+         fertrate_35_39_diff = fertrate_35_39_dp - fertrate_35_39_sf, 
+         fertrate_40_44_diff = fertrate_40_44_dp - fertrate_40_44_sf, 
+         fertrate_45_49_diff = fertrate_45_49_dp - fertrate_45_49_sf) %>% # Calculate fertiity rates per age group for sf and dp data and the difference
+  mutate(TFR_sf = (fertrate_10_14_sf + fertrate_15_19_sf + fertrate_20_24_sf + fertrate_25_29_sf + fertrate_30_34_sf + fertrate_35_39_sf + fertrate_40_44_sf + fertrate_45_49_sf) * 5) %>% # Calculate sf TFR
+  mutate(TFR_dp = (fertrate_10_14_dp + fertrate_15_19_dp + fertrate_20_24_dp + fertrate_25_29_dp + fertrate_30_34_dp + fertrate_35_39_dp + fertrate_40_44_dp + fertrate_45_49_dp) * 5) %>% # Calculate dp TFR
+  mutate(TFR_diff = TFR_dp - TFR_sf) %>% # Calculate TFR difference
+  mutate_if(is.numeric, list(~na_if(., Inf))) %>% # Convert infinity values to NA values (for export purposes)
+  arrange(desc(TFR_diff)) # Sort by descending order of TFR differences
+```
+
+```{r}
+# write_xlsx(list('co_births_fert_GSW' = dpsf_wide_co_births_fert_GSW), "./Data/dpsf_wide_co_births_fertility_GSW.xlsx")
+```
+
+Prepare a long data frame of county fertility rates per age group for chart creation in Excel.
+
+```{r}
+sf_long_co_fert_GSW <- dpsf_wide_co_births_fert_GSW %>%
+  select(GEOGRAPHY, GEOID, NAME, ORIG_NAME, fertrate_10_14_sf, fertrate_15_19_sf, fertrate_20_24_sf,fertrate_25_29_sf, fertrate_30_34_sf, fertrate_35_39_sf, fertrate_40_44_sf, fertrate_45_49_sf) %>%
+  gather(age_group, sf, 5:length(.)) %>% # Transpose all non-geographic variables
+  mutate(age_group = str_replace(age_group, "_sf", "")) %>%
+  mutate(sf = sf * 1000)
+
+dp_long_co_fert_GSW <- dpsf_wide_co_births_fert_GSW %>%
+  select(GEOGRAPHY, GEOID, NAME, ORIG_NAME, fertrate_10_14_dp, fertrate_15_19_dp, fertrate_20_24_dp, fertrate_25_29_dp, fertrate_30_34_dp, fertrate_35_39_dp, fertrate_40_44_dp, fertrate_45_49_dp) %>%
+  gather(age_group, dp, 5:length(.)) %>% # Transpose all non-geographic variables 
+  mutate(age_group = str_replace(age_group, "_dp", "")) %>%
+  mutate(dp = dp * 1000)
+
+dpsf_long_co_fert_GSW  <- sf_long_co_fert_GSW  %>%
+  inner_join(dp_long_co_fert_GSW, by = c('GEOGRAPHY', 'GEOID', 'NAME', 'ORIG_NAME', 'age_group')) %>%
+  mutate(age_group = str_replace(age_group, "fertrate_", "")) %>%
+  mutate(age_group = str_replace(age_group, "_", "-"))
+```
+
+Write out to an Excel file.
+
+```{r}
+# write_xlsx(list('dpsf_long_co_fert_GSW' = dpsf_long_co_fert_GSW), "./Data/dpsf_long_co_fertility.xlsx")
+```
+
+Use the exported fertility rates to create charts comparing dp-and sf-derived county fertility rates by age group.
+
+<span style="color: #BB86FC;">Download and view this interactive Excel chart by clicking the hyperlink below.</span>
+```{r}
+embed_file('./Data/Age Group-Specific County Fertility Rates SF1 vs Differential Privacy.xlsx')
+```
+![Age Group-Specific County Fertility Rates SF1 vs Differential Privacy.](images/Age Group-Specific County Fertility Rates SF1 vs Differential Privacy.png)
+
+
+### Migration
+
+Prepare a data frame of 2000-2004 and 2005-2009 total births per county. This information is used within the equation to calculate net migration rates.
+
+```{r class.source = 'fold-show', results='hide', message=FALSE}
+co_births_2000_2004 <- co_births_long_all %>%
+  filter(year %in% c(2000,2001,2002,2003,2004)) %>%
+  group_by(County) %>%
+  summarise(births_2000_2004 = sum(value)) %>%
+  ungroup()
+
+co_births_2005_2009 <- co_births_long_all %>%
+  filter(year %in% c(2005,2006,2007,2008,2009)) %>%
+  group_by(County) %>%
+  summarise(births_2005_2009 = sum(value)) %>%
+  ungroup()
+
+co_births_2000_2009 <- co_births_2000_2004 %>%
+  inner_join(co_births_2005_2009)
+
+remove(co_births_2000_2004)
+remove(co_births_2005_2009)
+```
+
+Write out to an Excel file.
+
+```{r}
+# write_xlsx(list('co_births_2000_2009' = co_births_2000_2009), "./Data/co_births_2000_2009.xlsx")
+```
+
+2000 and 2010 populations by age group and sex are also required to calculate net migration. Retrieve the 2000 decennial census population by and age group and sex for all Oregon counties using `tidycensus`.
+
+```{r class.source = 'fold-show', results='hide', message=FALSE}
+# Load the 2000 decennial census variables
+DC2000_sf1 <- load_variables(2000, "sf1", cache = TRUE)
+
+DC2000_sf1_pop_sexbyage <- DC2000_sf1 %>%
+  filter(str_detect(name, "^P012")) %>% # Filter for variables in table P012
+  slice(1:49) # Filter for the first 49 variables
+
+# remove(DC2000_sf1)
+# remove(DC2000_sf1_pop_sexbyage)
+
+# Create a vector of Oregon County FIPS codes
+co_names_vector <- tidycensus::fips_codes %>%
+  filter(state_name == "Oregon") %>% 
+  select(county_code)
+
+co_wide_pop_sexbyage_2000 <- tidycensus::get_decennial(
+geography = 'county',
+variables = c(pop_sex_total = 'P012001', pop_sex_m_tot = 'P012002', pop_sex_m_00_04 = 'P012003', pop_sex_m_05_09 = 'P012004', pop_sex_m_10_14 = 'P012005', pop_sex_m_15_17 = 'P012006', pop_sex_m_18_19 = 'P012007', pop_sex_m_20 = 'P012008', pop_sex_m_21 = 'P012009', pop_sex_m_22_24 = 'P012010', pop_sex_m_25_29 = 'P012011', pop_sex_m_30_34 = 'P012012', pop_sex_m_35_39 = 'P012013', pop_sex_m_40_44 = 'P012014', pop_sex_m_45_49 = 'P012015', pop_sex_m_50_54 = 'P012016', pop_sex_m_55_59 = 'P012017', pop_sex_m_60_61 = 'P012018', pop_sex_m_62_64 = 'P012019', pop_sex_m_65_66 = 'P012020', pop_sex_m_67_69 = 'P012021', pop_sex_m_70_74 = 'P012022', pop_sex_m_75_79 = 'P012023', pop_sex_m_80_84 = 'P012024', pop_sex_m_85_over = 'P012025', pop_sex_f_tot = 'P012026', pop_sex_f_00_04 = 'P012027', pop_sex_f_05_09 = 'P012028', pop_sex_f_10_14 = 'P012029', pop_sex_f_15_17 = 'P012030', pop_sex_f_18_19 = 'P012031', pop_sex_f_20 = 'P012032', pop_sex_f_21 = 'P012033', pop_sex_f_22_24 = 'P012034', pop_sex_f_25_29 = 'P012035', pop_sex_f_30_34 = 'P012036', pop_sex_f_35_39 = 'P012037', pop_sex_f_40_44 = 'P012038', pop_sex_f_45_49 = 'P012039', pop_sex_f_50_54 = 'P012040', pop_sex_f_55_59 = 'P012041', pop_sex_f_60_61 = 'P012042', pop_sex_f_62_64 = 'P012043', pop_sex_f_65_66 = 'P012044', pop_sex_f_67_69 = 'P012045', pop_sex_f_70_74 = 'P012046', pop_sex_f_75_79 = 'P012047', pop_sex_f_80_84 = 'P012048', pop_sex_f_85_over = 'P012049'),
+state = 'OR',
+county = co_names_vector$county_code,
+year = 2000,
+geometry = F,
+output = 'wide',
+cache_table = F
+) %>%
+  # Calculate missing 5-year age groups by sex variables by summing composite variables
+  mutate(pop_sex_m_15_19 = pop_sex_m_15_17 + pop_sex_m_18_19) %>%
+  mutate(pop_sex_m_20_24 = pop_sex_m_20 + pop_sex_m_21 + pop_sex_m_22_24) %>%
+  mutate(pop_sex_m_60_64 = pop_sex_m_60_61 + pop_sex_m_62_64) %>%
+  mutate(pop_sex_m_65_69 = pop_sex_m_65_66 + pop_sex_m_67_69) %>%
+  mutate(pop_sex_f_15_19 = pop_sex_f_15_17 + pop_sex_f_18_19) %>%
+  mutate(pop_sex_f_20_24 = pop_sex_f_20 + pop_sex_f_21 + pop_sex_f_22_24) %>%
+  mutate(pop_sex_f_60_64 = pop_sex_f_60_61 + pop_sex_f_62_64) %>%
+  mutate(pop_sex_f_65_69 = pop_sex_f_65_66 + pop_sex_f_67_69) %>%
+  select(-NAME1, -GEOID1) %>%
+  select(NAME, GEOID, pop_sex_total, pop_sex_m_tot, pop_sex_m_00_04, pop_sex_m_05_09, pop_sex_m_10_14, pop_sex_m_15_19, pop_sex_m_20_24, pop_sex_m_25_29, pop_sex_m_30_34, pop_sex_m_35_39, pop_sex_m_40_44, pop_sex_m_45_49, pop_sex_m_50_54, pop_sex_m_55_59, pop_sex_m_60_64, pop_sex_m_65_69, pop_sex_m_70_74, pop_sex_m_75_79, pop_sex_m_80_84, pop_sex_m_85_over, pop_sex_f_tot, pop_sex_f_00_04, pop_sex_f_05_09, pop_sex_f_10_14, pop_sex_f_15_19, pop_sex_f_20_24, pop_sex_f_25_29, pop_sex_f_30_34, pop_sex_f_35_39, pop_sex_f_40_44, pop_sex_f_45_49, pop_sex_f_50_54, pop_sex_f_55_59, pop_sex_f_60_64, pop_sex_f_65_69, pop_sex_f_70_74, pop_sex_f_75_79, pop_sex_f_80_84, pop_sex_f_85_over) %>%
+  mutate(NAME = str_replace(NAME," County", ""))
+
+remove(co_names_vector)
+```
+
+Restructure the data frame to long format.
+
+```{r class.source = 'fold-show'}
+co_long_pop_sexbyage_2000 <- co_wide_pop_sexbyage_2000 %>%
+  gather(variable, value, 3:length(.)) %>%
+  arrange(NAME, GEOID, variable) %>%
+  filter(!variable %in% c('pop_sex_f_tot','pop_sex_m_tot','pop_sex_total'))
+```
+
+Create 2010 sf and dp data frames to match the 2000 county population by sex and age data frame.
+
+```{r}
+# sf
+co_long_pop_sexbyage_2010_sf <- dpsf_wide_geog_geo_sans_bl %>%
+  st_set_geometry(NULL) %>% # Remove geometry
+  filter(GEOGRAPHY == "County") %>% # Query county observations
+  select(NAME, GEOID, pop_sex_total_sf, pop_sex_m_tot_sf, pop_sex_m_00_04_sf, pop_sex_m_05_09_sf, pop_sex_m_10_14_sf, pop_sex_m_15_19_sf, pop_sex_m_20_24_sf, pop_sex_m_25_29_sf, pop_sex_m_30_34_sf, pop_sex_m_35_39_sf, pop_sex_m_40_44_sf, pop_sex_m_45_49_sf, pop_sex_m_50_54_sf, pop_sex_m_55_59_sf, pop_sex_m_60_64_sf, pop_sex_m_65_69_sf, pop_sex_m_70_74_sf, pop_sex_m_75_79_sf, pop_sex_m_80_84_sf, pop_sex_m_85_over_sf, pop_sex_f_tot_sf, pop_sex_f_00_04_sf, pop_sex_f_05_09_sf, pop_sex_f_10_14_sf, pop_sex_f_15_19_sf, pop_sex_f_20_24_sf, pop_sex_f_25_29_sf, pop_sex_f_30_34_sf, pop_sex_f_35_39_sf, pop_sex_f_40_44_sf, pop_sex_f_45_49_sf, pop_sex_f_50_54_sf, pop_sex_f_55_59_sf, pop_sex_f_60_64_sf, pop_sex_f_65_69_sf, pop_sex_f_70_74_sf, pop_sex_f_75_79_sf, pop_sex_f_80_84_sf, pop_sex_f_85_over_sf) %>%
+  gather(variable, value, 3:length(.)) %>%
+  arrange(NAME, GEOID, variable) %>%
+  filter(!variable %in% c('pop_sex_f_tot_sf','pop_sex_m_tot_sf','pop_sex_total_sf'))
+
+# dp
+co_long_pop_sexbyage_2010_dp <- dpsf_wide_geog_geo_sans_bl %>%
+    st_set_geometry(NULL) %>% # Remove geometry
+  filter(GEOGRAPHY == "County") %>% # Query county observations
+  select(NAME, GEOID, pop_sex_total_dp, pop_sex_m_tot_dp, pop_sex_m_00_04_dp, pop_sex_m_05_09_dp, pop_sex_m_10_14_dp, pop_sex_m_15_19_dp, pop_sex_m_20_24_dp, pop_sex_m_25_29_dp, pop_sex_m_30_34_dp, pop_sex_m_35_39_dp, pop_sex_m_40_44_dp, pop_sex_m_45_49_dp, pop_sex_m_50_54_dp, pop_sex_m_55_59_dp, pop_sex_m_60_64_dp, pop_sex_m_65_69_dp, pop_sex_m_70_74_dp, pop_sex_m_75_79_dp, pop_sex_m_80_84_dp, pop_sex_m_85_over_dp, pop_sex_f_tot_dp, pop_sex_f_00_04_dp, pop_sex_f_05_09_dp, pop_sex_f_10_14_dp, pop_sex_f_15_19_dp, pop_sex_f_20_24_dp, pop_sex_f_25_29_dp, pop_sex_f_30_34_dp, pop_sex_f_35_39_dp, pop_sex_f_40_44_dp, pop_sex_f_45_49_dp, pop_sex_f_50_54_dp, pop_sex_f_55_59_dp, pop_sex_f_60_64_dp, pop_sex_f_65_69_dp, pop_sex_f_70_74_dp, pop_sex_f_75_79_dp, pop_sex_f_80_84_dp, pop_sex_f_85_over_dp) %>%
+  gather(variable, value, 3:length(.)) %>%
+  arrange(NAME, GEOID, variable) %>%
+  filter(!variable %in% c('pop_sex_f_tot_dp','pop_sex_m_tot_dp','pop_sex_total_dp'))
+```
+
+Write out the three data frames to an Excel file.
+
+```{r}
+# write_xlsx(list('2000' = co_long_pop_sexbyage_2000, '2010_sf' = co_long_pop_sexbyage_2010_sf, '2010_dp' = co_long_pop_sexbyage_2010_dp), "./Data/dpsf_long_co_pop_sexbyage.xlsx")
+```
+
+Lastly, age group-specific survival ratios are required to calculate net migration. The Center of Disease Control and Prevention National Center for Health Statistics prepares life tables that contain survivorship by 5-year age group, race, and sex. The [2005 life table](https://www.cdc.gov/nchs/products/life_tables.htm "2005 life table") was chosen because it is the midpoint between the 2000 and 2010 censuses. Table 10 contains the necessary data (i.e., 2005 number of survivors out of 100,000 born alive [`lx`]). White male and females values were retrieved and used in calculations due the general racial/ethnic composition of Oregon.
+
+The survival ratios were calculated (in Excel) by dividing the `lx` value for one 5-year age group by the `lx` value for the next younger age group. For example, the 15-19 age group survival ratio is equal to 0.9981 based on dividing the 20 `lx` of 99,086 by the 15 `lx` of 99,270. For 85+ age group, the survival ratio is the sum of the `lx` values from 85 to the oldest age, divided by the sum of the `lx` values from 80 to the oldest age. For a five-year interval, the survival ratio of births is the ratio of the number alive at ages 0-4, divided by the number of births in a five year period; however, for simplicity, the 0-4 five-year ratio was used for births.
+
+The four necessary components were then unified in a single Excel file, where the following calculations could be performed.
+The 2000 population per county by 5-year age group and sex were survived to 2005 by applying the age groups' corresponding survival ratios. The 2005 0-4 population was calculated by applying the 0-4 survival ratio to approximately half (particularly 0.49 for females and 0.51 for males to account for the average sex ratio) the sum of 2000-2004 births per county. The 2005 survived populations were then survived to 2010 by applying the age groups' corresponding survival ratios. The 2010 0-4 population was calculated by applying the 0-4 survival ratio to approximately half the sum of 2005-2009 births per county. Net migration was then calculated by subtracting the 2010 survived population by the observed sf and dp 2010 populations per county by age group and sex. Total population net migration values were calculated by summing the female and male components.
+
+Charts were then created, comparing dp-and sf-derived county migration rates by age group.
+
+<span style="color: #BB86FC;">Download and view this interactive Excel chart by clicking the hyperlink below.</span>
+```{r}
+embed_file('./Data/Age Group-Specific County Net Migration SF1 vs Differential Privacy.xlsx')
+```
+
+![Age Group-Specific County Net Migration SF1 vs Differential Privacy.](images/Age Group-Specific County Net Migration SF1 vs Differential Privacy.png)
+
+As depicted in the previous visualizations, considerable differences exist between the sf and dp data. Comparing the data by various geographic area levels reveals that the severity of differences are not uniform across space. Geographic areas that are less populous are prone to greater variability between the sf and dp values. Moreover, the greater variability does not impact the entire population equally. Sub-populations, racial/ethnic minorities, and hard-to-count-populations often account for a disproportionate amount of variability. Furthermore, outright errors exist in some of the values of reviewed dp variables. For instance, there fourteen places with average household sizes less than 1, which is nonsensical, since by definition, a household must be comprised of at least one person. In a recent statement, the Census Bureau noted that errors observed in the demonstration data products stem from two sources: one is the differential privacy mechanism itself (the noise necessary to protect privacy) and the other--and more substantial--is the post-processing performed on the "noisy" privacy-protected data to put it into the format necessary for the Census Bureau’s tabulation process (Abowd and Velkoff 2020). As mentioned, inaccuracies due to these post-processing errors will lead to erroneous assumptions of population change over time, misallocation of funding, the hampering of all planning efforts that leverage census data. The Census Bureau has acknowledged this and has stated that structural and statistical changes to the DAS are required to mitigate these errors (Abowd and Velkoff 2020).
+
+# Conclusion
+
+Census data are the foundation of a myriad of public- and private-sector efforts that support accurate funding and resource allocation, housing and land use policy development, and emergency preparedness. From the perspective of county and local governments in Oregon, accurate census data is imperative to the success of such activities as drawing appropriately-sized school attendance areas, assessing the impact of changes in land use and zoning, reaching at-risk populations, determining intercensal population estimates, and forecasting future populations (Salvo et. al 2019, 18). The protection of individual respondents privacy is a necessary and absolutely worthwhile endeavor, but it should not sacrifice the accuracy of data that is essential to the aforementioned processes.
+
+The results of this research indicate that adjustments to the differential privacy algorithms and privacy loss budget allocation are necessary to ensure that accurate data is prepared for public consumption. Census Bureau analysts have stated that several promising solutions to the widely-recognized post-processing errors have been identified, including changes to the geographic hierarchy used within the DAS, alternative estimation techniques to correct for the known biases of Non-Negative Least Squares optimization and multiphase estimation of key statistics during post-processing (Abowd and Velkoff 2020). Numerous researchers and data users showed their willingness to heed the call of action to assist in the process of determining the right balance between accuracy and privacy, and it would benefit all stakeholders if the Census Bureau produced more demonstration data products to show progress on correcting post-processing errors and fine-tuning on the the differential privacy mechanism. Lastly, it is of utmost importance that the Census Bureau start or continue dialogues with those communities and sub-populations that stand to be most impacted by the use of differential privacy.
+
+# References
+
+Abowd, John M. and Victoria A. Velkoff. 2019. "Balancing Privacy and Accuracy: New Opportunity for Disclosure Avoidance Analysis." In Census.gov Research Matters. October 29, 2019. U.S. Census Bureau. https://www.census.gov/newsroom/blogs/research-matters/2019/10/balancing_privacyan.html
+
+Abowd, John M. and Victoria A. Velkoff. 2020. "Modernizing Disclosure Avoidance: What We've Learned, Where We Are Now." In Census.gov Research Matters. March 13, 2020. U.S. Census Bureau. https://www.census.gov/newsroom/blogs/research-matters/2020/03/modernizing_disclosu.html
+
+Akee, Randy " Population Counts on American Indian Reservations and Alaska Native Villages with and without the Application of Differential Privacy." Presentation at the National Academies of Science, Engineering, & Medicine Committee of National Statistics Workshop on 2020 Census Data Products: Data Needs and Privacy Considerations, Washington DC, December 11 - 12, 2019. https://sites.nationalacademies.org/cs/groups/dbassesite/documents/webpage/dbasse_197503.pdf
+
+Arguillas, Florio. Cornell Institute for Social and Economic Research (CISER) Census 2010 Demographic and Housing Demonstration: Version 1.0 [dataset]. Ithaca, NY: CISER, 2019. DOI: 10.6077/fe6a-f789. https://ciser.cornell.edu/data/data-archive/census-2010-dhc-download-center/
+
+Gunter, Meredith Strohm."2020 Census Data Distortion." Email to The Honorable Ralph Northam Governor of the Commonwealth of Virginia. January 23, 2020. https://sdcclearinghouse.com/2020/01/24/memo-on-2020-census-data-distortion/
+
+Nagle, Nicholas and Tim Kuhn. "Implications for School Enrollment Statistics." Presentation at the National Academies of Science, Engineering, & Medicine Committee of National Statistics Workshop on 2020 Census Data Products: Data Needs and Privacy Considerations, Washington DC, December 11 - 12, 2019. https://sites.nationalacademies.org/cs/groups/dbassesite/documents/webpage/dbasse_197492.pdf
+
+Portland State University Population Research Center. 2020. Oregon Population Forecast Program. https://www.pdx.edu/prc/opfp
+
+Rowland, Donald T. Demographic methods and concepts. New York: Oxford University Press, 2003.
+
+Ruggles, Steven, et. al. 2019. "Differential Privacy and Census Data: Implications for Social and Economic Research" In AEA Papers and Proceedings 109: 403–408. https://doi.org/10.1257/pandp.20191107
+
+Salvo, Joseph, et. al. " Establishing Priorities for the Privacy Budget: The Case for Good Age Data." Presentation at the National Academies of Science, Engineering, & Medicine Committee of National Statistics Workshop on 2020 Census Data Products: Data Needs and Privacy Considerations, Washington DC, December 11 - 12, 2019. https://sites.nationalacademies.org/cs/groups/dbassesite/documents/webpage/dbasse_197488.pdf
+
+U.S. Census Bureau. 2019a. 2010 Demonstration Data Files. https://www2.census.gov/programs-surveys/decennial/2020/program-management/data-product-planning/2010-demonstration-data-products/?#
+
+U.S. Census Bureau. 2019b. 2010 Demonstration Data Products. https://www.census.gov/programs-surveys/decennial-census/2020-census/planning-management/2020-census-data-products/2010-demonstration-data-products.html
+
+U.S. Census Bureau. 2019c. 2010 Demonstration Data Product Technical Documentation. Issued October 2019, Updated User Notes January 24, 2020.
+https://www2.census.gov/programs-surveys/decennial/2020/program-management/data-product-planning/2010-demonstration-data-products/2010_Demonstration_Data_Product_Technical_Document.pdf?#
+
+U.S. Census Bureau. 2019d. Disclosure Avoidance System for the 2010 Demonstration Data Products: Design Specification. November 15, 2019. https://github.com/uscensusbureau/census2020-das-2010ddp/blob/master/doc/2010-Demonstration-Data-Products-Disclosure-Avoidance-System-Design-Specification%20FINAL.pdf
+
+U.S. Census Bureau. 2019e. Frequently Asked Questions for the 2010 Demonstration Data Products. Last Revised: December 19, 2019. https://www.census.gov/programs-surveys/decennial-census/2020-census/planning-management/2020-census-data-products/2010-demonstration-data-products/faqs.html
+
+U.S. Census Bureau. 2019f. "Title 13, Differential Privacy, and the 2020 Decennial Census". Presentation by Michael Hawes at the 2019 Census Data Users Conference, Portland, OR October 3, 2019.  https://www.pdx.edu/prc/past-events. https://www.pdx.edu/prc/sites/www.pdx.edu.prc/files/New%20Privacy%20Measures%20for%20the%202020%20Census.pptx
+
+Van Riper, David and Seth Spielman. "Geographic Review of Differentially Private Demonstration Data." Presentation at the National Academies of Science, Engineering, & Medicine Committee of National Statistics Workshop on 2020 Census Data Products: Data Needs and Privacy Considerations, Washington DC, December 11 - 12, 2019. https://sites.nationalacademies.org/cs/groups/dbassesite/documents/webpage/dbasse_197491.pdf
+
+# Supporting Data
+
+U.S. Census Bureau
+```{r}
+embed_file('./Data/Census/2010 Census Summary File 1.pdf')
+embed_file('./Data/Census/2010_Demonstration_Data_Product_Technical_Document.pdf')
+embed_file('./Data/Census/2020-census-data-products-planning-crosswalk.xlsx')
+```
+
+
+---
+
+
+CDC NCHS
+```{r}
+embed_file('./Data/CDC_NCHS/CDC_NCHS_United States Life Tables_2005.pdf')
+```
+
+
+---
+
+
+Oregon Spatial Data Library
+```{r}
+embed_file('./Data/GIS/Oregon Spatial Data Library/UGB_2018.zip')
+```
+
+
+---
+
+
+Project Intermediates & Results
+```{r}
+embed_file('./Data/Age Group-Specific County Fertility Rates SF1 vs Differential Privacy.xlsx')
+embed_file('./Data/Age Group-Specific County Net Migration SF1 vs Differential Privacy.xlsx')
+embed_file('./Data/Variable_Aliases.xlsx')
+embed_file('./Data/GIS/Update_Aliases_dpsf_wide_geog_geo.py')
+```
+
+
+---
+
+
+Alteryx workflows & macros available upon request.
+
+# Contact
+
+Alex Brasch
+
+Portland State University | Graduate Student  
+Graduate Certificate in Applied Social Demography  
+abrasch@pdx.edu
+
+FLO Analytics | Population Geographer | Data Analyst  
+abrasch@flo-analytics.com
+
+Personal | Cyclist | Data Nerd | Homebrewer  
+alexbrasch88@gmail.com
