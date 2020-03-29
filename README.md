@@ -1,4 +1,9 @@
 # PSU-USP522-Practicum
+
+This repository includes my comparison of Census 2010 summary file 1 & differentially private data in Oregon.
+
+View the full document here: 
+
 **A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon**  
 Portland State University  
 Graduate Certificate in Applied Social Demography  
