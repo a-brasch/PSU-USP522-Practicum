@@ -6,7 +6,7 @@ USP 522 Research Practicum in Applied Demography
 Winter Quarter 2020
 
 **Links:**  
-[GitHub Repo: PSU-USP522-Practicum](https://github.com/a-brasch/PSU-USP522-Practicum "GitHub Repo: PSU-USP522-Practicum")  
+[GitHub repository: PSU-USP522-Practicum](https://github.com/a-brasch/PSU-USP522-Practicum "GitHub repository: PSU-USP522-Practicum")  
 [PSU webspace: USP 522](http://web.pdx.edu/~abrasch/USP522/ "PSU webspace: USP 522")  
 [Esri Dashboard: Census 2010 SF1 vs. Differential Privacy: Oregon Geographies](https://maulfoster.maps.arcgis.com/apps/opsdashboard/index.html#/6fea214d11784e5aa277157e8f5db3f0 "Esri Dashboard: Census 2010 SF1 vs. Differential Privacy: Oregon Geographies")
 
