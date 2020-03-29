@@ -1,17 +1,18 @@
 # PSU-USP522-Practicum
-
-This repository includes my comparison of Census 2010 summary file 1 & differentially private data in Oregon.
-
-View the full document here: 
-
-**A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon**  
+**[A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon](https://a-brasch.github.io/PSU-USP522-Practicum/) "A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon")**  
 Portland State University  
 Graduate Certificate in Applied Social Demography  
 USP 522 Research Practicum in Applied Demography  
 Winter Quarter 2020
 
-**Abstract:**
+**Links:**  
+[GitHub Repo: PSU-USP522-Practicum](https://github.com/a-brasch/PSU-USP522-Practicum "GitHub Repo: PSU-USP522-Practicum")  
+[PSU webspace: USP 522](http://web.pdx.edu/~abrasch/USP522/ "PSU webspace: USP 522")  
+[Esri Dashboard: Census 2010 SF1 vs. Differential Privacy: Oregon Geographies](https://maulfoster.maps.arcgis.com/apps/opsdashboard/index.html#/6fea214d11784e5aa277157e8f5db3f0 "Esri Dashboard: Census 2010 SF1 vs. Differential Privacy: Oregon Geographies")
 
+---
+
+**Abstract:**  
 The U.S. Census Bureau has committed to deploy a modernized disclosure avoidance system (DAS) in order to safeguard data collected during the 2020 Census. The foundation of the updated DAS methodology is differential privacy—a set of mathematical algorithms developed by cryptographers and computer scientists intended to protect respondent confidentiality. Differential privacy leverages a suite of techniques that includes the introduction of uncertainty (i.e., noise, synthetic data) into aggregated respondent data, data-swapping, and data imputation, with the goal of ensuring that enumerated data sets cannot be backwards-engineered to identify individual respondents. Differential privacy strives to balance confidentiality and data accuracy; however, many researchers have expressed concern over these techniques' impact on data quality and the potential to adversely affect demographic research and policies, as well as the lives of racial/ethnic minorities and under-represented population subgroups (Salvo 2019, Akee 2019, Van Riper 2019, Nagle 2019). To help researchers and data users assess the "fitness for use" of 2020 census data products produced using differential privacy, the Census Bureau prepared 2010 Census Demonstration Data Products, which were made public on October 19, 2019.
 
 Census data are the foundation of a myriad of public- and private-sector efforts that support accurate funding and resource allocation, housing policy development, and emergency preparedness. From the perspective of county and local governments in Oregon, accurate census data is imperative to the success of such activities as drawing appropriately-sized school attendance areas, assessing the impact of changes in land use and zoning, reaching at-risk populations, determining intercensal population estimates, and forecasting future populations (Salvo et. al 2019, 18). The protection of individual respondents privacy is a necessary and absolutely worthwhile endeavor, but it should not sacrifice the accuracy of data that is essential to the aforementioned processes.
@@ -22,18 +23,7 @@ The results of this research, including interactive visualizations, indicate tha
 
 ---
 
-**Links:**
-
-[PSU webspace: USP 522](http://web.pdx.edu/~abrasch/USP522/ "PSU webspace: USP 522")
-
-[GitHub Repo: PSU-USP522-Practicum](https://github.com/a-brasch/PSU-USP522-Practicum "GitHub Repo: PSU-USP522-Practicum")
-
-[Esri Dashboard: Census 2010 SF1 vs. Differential Privacy: Oregon Geographies](https://maulfoster.maps.arcgis.com/apps/opsdashboard/index.html#/6fea214d11784e5aa277157e8f5db3f0 "Esri Dashboard: Census 2010 SF1 vs. Differential Privacy: Oregon Geographies")
-
----
-
-**Contact Information:**
-
+**Contact Information:**  
 Alex Brasch
 
 Portland State University | Graduate Student  
