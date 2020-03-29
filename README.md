@@ -1,5 +1,5 @@
 # PSU-USP522-Practicum
-**[A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon](https://a-brasch.github.io/PSU-USP522-Practicum/) "A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon")**  
+**[A Comparison of Census 2010 SF1 & Differentially Private Data in Oregon](https://a-brasch.github.io/PSU-USP522-Practicum/)**  
 Portland State University  
 Graduate Certificate in Applied Social Demography  
 USP 522 Research Practicum in Applied Demography  
